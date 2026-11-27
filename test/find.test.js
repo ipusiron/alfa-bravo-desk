@@ -36,7 +36,8 @@ test('X ray：空白・ハイフン・改行を1つはさむ形は1語、2つ以
   assert.equal(C.find('X\nray Bravo').decoded, 'XB');
   assert.equal(C.find('X\r\nray Bravo').decoded, 'XB');
   assert.equal(C.find('X-Ray Bravo').decoded, 'XB');
-  const two = C.find('X  ray Bravo');
+  // 単語ごとに読むとき（自動では、英字の並びとして区切るほうが多く読めるので、区切って読む）
+  const two = C.find('X  ray Bravo', { mode: 'words' });
   assert.equal(two.matches.length, 1);
   assert.equal(two.matches[0].text, 'Bravo');
   // 改行をはさんだ語は、揺れの一覧では空白1つにして出す
@@ -150,7 +151,7 @@ test('区切りのない並び：自作の例は SECRET?KEY?、読み方を切�
 
 test('区切りのない並び：数字の語の切り替えと、英字のない文', () => {
   assert.equal(C.find('ALFANINERBRAVO').decoded, 'A9B');
-  assert.equal(C.find('ALFANINERBRAVO', { digits: false }).decoded, 'A?B');
+  assert.equal(C.find('ALFANINERBRAVO', { digits: false, mode: 'joined' }).decoded, 'A?B');
   const empty = C.find('1234 !!', { mode: 'joined' });
   assert.deepEqual([empty.decoded, empty.matches.length, empty.unread.length], ['', 0, 0]);
   assert.equal(C.detectMode(''), 'words');
@@ -163,4 +164,48 @@ test('空白と改行を消す：半角・全角・タブの空白と、CRLF・L
   assert.deepEqual(C.removeLineBreaks('a\r\nb\nc\rd'), { text: 'abcd', count: 3 });
   assert.deepEqual(C.removeSpaces('abc'), { text: 'abc', count: 0 });
   assert.deepEqual(C.removeLineBreaks(''), { text: '', count: 0 });
+});
+
+test('自動の判断：読めた英字の割合で決める（定数とその値）', () => {
+  assert.equal(C.AUTO_JOINED_MIN, 0.7);
+  assert.equal(C.AUTO_JOINED_MARGIN, 0.2);
+  assert.equal(C.LONG_TOKEN, 9);
+  assert.equal(C.LONG_TOKEN_MIN, 0.8);
+  assert.equal(C.readRatio(C.find('Alfa xyz'), 'Alfa xyz'), 4 / 7);
+  assert.equal(C.readRatio(C.find(''), ''), 0);
+});
+
+test('自動の判断：区切りのない並びは、形が違っても切れ目なく続く並びとして読む', () => {
+  const oneLine = C.find('ALPHAMIKEECHOTANGOHOTELYANKEE');
+  assert.deepEqual([oneLine.mode, oneLine.decoded], ['joined', 'AMETHY']);
+  // 空白だけを消した形（16文字の行が9行。語が行をまたぐ）
+  const lines = C.removeSpaces(SPACED).text;
+  assert.equal(lines.split('\n').length, 9);
+  const r = C.find(lines);
+  assert.deepEqual([r.mode, r.decoded], ['joined', 'AMETHYSTD?AMONDEMERALDQUARTZ?']);
+  assert.deepEqual([C.find('alphamikeechotango').mode, C.find('alphamikeechotango').decoded], ['joined', 'AMET']);
+  assert.deepEqual([C.find('ALFABRAVO').mode, C.find('ALFABRAVO').decoded], ['joined', 'AB']);
+});
+
+test('自動の判断：文章の中に混じった区切りのない並びは、文章として読み、その並びだけを区切る', () => {
+  const r = C.find('The answer: ALPHAMIKEECHOTANGO done');
+  assert.equal(r.mode, 'words');
+  assert.equal(r.splitTokens, 1);
+  assert.equal(r.decoded, 'AMET');
+  assert.ok(r.matches.every((m) => m.split));
+  // 8割に届かないまとまりは区切らない
+  const low = C.find('The answer: ALPHAQWERTYUIOP done');
+  assert.equal(low.splitTokens, 0);
+  assert.equal(low.decoded, '');
+});
+
+test('自動の判断：ふつうの英文は単語ごとのまま、例文2つは前と同じ結果', () => {
+  const plain = C.find('Meet me at the hotel near the golf course tomorrow.');
+  assert.equal(plain.mode, 'words');
+  assert.equal(plain.decoded, '');
+  assert.deepEqual(plain.singles.map((k) => plain.matches[k].text), ['hotel', 'golf']);
+  const ex = C.find(M.ja.exampleText);
+  assert.deepEqual([ex.mode, ex.decoded, ex.singles.length], ['words', 'AB79 XE', 1]);
+  const ex2 = C.find(M.ja.exampleJoinedText);
+  assert.deepEqual([ex2.mode, ex2.decoded], ['joined', 'SECRET?KEY?']);
 });

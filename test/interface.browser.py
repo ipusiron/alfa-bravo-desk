@@ -325,16 +325,26 @@ def test_spelling_and_find(browser, url, name, output=None):
     check(page.text_content("#decoded-line") == "AMETHYSTD?AMONDEMERALDQUARTZ?", (name, "spaced run", page.text_content("#decoded-line")))
     check(page.text_content("#find-count") == "区切った単語：27語・読めない部分：2か所", (name, "count line"))
     page.click("[data-findmode=words]")
-    check(page.text_content("#find-mode-line") == "単語の間に空白がある文章として読みました。", (name, "words mode line"))
+    check(page.text_content("#find-mode-line") == "単語ごとに読みました。", (name, "words mode line"))
     check(page.text_content("#decoded-line") == "", (name, "nothing in word mode"))
     page.click("[data-findmode=auto]")
+    # Only the spaces removed (16 letters a line, 9 lines): read as a run automatically
+    page.fill("#find-input", SPACED.replace(" ", ""))
+    check(page.text_content("#decoded-line") == "AMETHYSTD?AMONDEMERALDQUARTZ?", (name, "lines without spaces"))
+    check(page.text_content("#find-mode-line").startswith("自動で判断し、英字が切れ目なく続く並びとして区切りました。"), (name, "auto joined line"))
+    check(page.is_visible("#unread-block"), (name, "unread list shown"))
+    # A run inside a sentence: read word by word, and only the run is split
+    page.fill("#find-input", "The answer: ALPHAMIKEECHOTANGO done")
+    check(page.text_content("#decoded-line") == "AMET", (name, "run in a sentence"))
+    check(page.text_content("#find-mode-line") == "自動で判断し、単語ごとに読みました。長い英字のまとまり1か所は、通話表の単語に区切って読みました。", (name, "split line"))
+    page.fill("#find-input", SPACED.replace(" ", ""))
     if output:
         for width, height in ((1280, 800), (390, 844)):
             page.set_viewport_size({"width": width, "height": height})
             page.evaluate("document.querySelector('.tabs').scrollIntoView()")
             page.wait_for_timeout(200)
-            page.screenshot(path=str(output / f"find_run_{width}.png"), caret="initial")
-            page.screenshot(path=str(output / f"find_run_{width}_full.png"), full_page=True, caret="initial")
+            page.screenshot(path=str(output / f"find_lines_{width}.png"), caret="initial")
+            page.screenshot(path=str(output / f"find_lines_{width}_full.png"), full_page=True, caret="initial")
     assert_clean(page, errors, name)
     context.close()
 

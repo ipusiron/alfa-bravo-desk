@@ -152,33 +152,45 @@
   const X_JOINS = /^(?: |-|\r?\n)$/;
   const GAP_IN_RUN = /^[\s\p{P}]*$/u;
 
-  // 読み方：'words'＝単語の間に空白がある文章、'joined'＝英字が切れ目なく続く並び（1文字ずつ空白・改行で区切った並びを含む）
+  // 読み方：'words'＝単語ごと（単語の間に空白がある文章）、'joined'＝英字が切れ目なく続く並び（1文字ずつ空白・改行で区切った並びを含む）
   const FIND_MODES = Object.freeze(['auto', 'words', 'joined']);
+  // 自動の判断：英字が切れ目なく続く並びとして読んだとき、読めた英字の割合が AUTO_JOINED_MIN 以上で、
+  // 単語ごとに読んだとき（長いまとまりを区切らない読み方）より AUTO_JOINED_MARGIN 以上多ければ、切れ目なく続く並びとして読む
+  const AUTO_JOINED_MIN = 0.7;
+  const AUTO_JOINED_MARGIN = 0.2;
+  // 単語ごとに読むときも、LONG_TOKEN 文字以上のまとまり（通話表の語より長い）は区切ってみて、LONG_TOKEN_MIN 以上読めたら区切った結果を使う
+  const LONG_TOKEN = 9;
+  const LONG_TOKEN_MIN = 0.8;
+  const JOINED_MAX = 8; // 通話表の語の最長（November・Whiskey などは8文字以下）
 
-  // 自動の判断：英字のまとまりの8割以上が1文字（4つ以上）なら、1文字ずつ区切った並び。
-  // 英字のまとまりが3つまでで、どれも9文字以上（通話表の語より長い）なら、切れ目なく続く並び。それ以外は単語の間に空白がある文章
-  function detectMode(text) {
-    const tokens = String(text).match(/[A-Za-z]+/g) || [];
-    if (!tokens.length) return 'words';
-    const single = tokens.filter((t) => t.length === 1).length;
-    if (tokens.length >= 4 && single / tokens.length >= 0.8) return 'joined';
-    if (tokens.length <= 3 && tokens.every((t) => t.length >= 9)) return 'joined';
-    return 'words';
+  const asciiLetters = (s) => (String(s).match(/[A-Za-z]/g) || []).length;
+  // 読めた英字の割合（英字がなければ0）
+  function readRatio(result, source) {
+    const total = asciiLetters(source);
+    if (!total) return 0;
+    return result.matches.reduce((a, m) => a + asciiLetters(m.text), 0) / total;
+  }
+
+  function detectMode(text, digits = true) {
+    const source = String(text);
+    const words = readRatio(findWords(source, digits, false), source);
+    const joined = readRatio(findJoined(source, digits), source);
+    return joined >= AUTO_JOINED_MIN && joined - words >= AUTO_JOINED_MARGIN ? 'joined' : 'words';
   }
 
   function find(text, options = {}) {
     const source = String(text);
     const digits = options.digits !== false;
     const requested = FIND_MODES.includes(options.mode) ? options.mode : 'auto';
-    const mode = requested === 'auto' ? detectMode(source) : requested;
-    const result = mode === 'joined' ? findJoined(source, digits) : findWords(source, digits);
-    // 揺れの一覧：同じ形（大文字と小文字を区別しない・空白類は1つの空白に）は1行にまとめ、最初に出た順に並べる
+    const mode = requested === 'auto' ? detectMode(source, digits) : requested;
+    const result = mode === 'joined' ? findJoined(source, digits) : findWords(source, digits, true);
+    // 揺れの一覧：同じ形（大文字と小文字を区別しない）は1行にまとめ、最初に出た順に並べる。
+    // 区切って読んだ語は、あいだの空白・改行を除いた英字だけで示す
     const variants = [];
     const seen = new Set();
     for (const m of result.matches) {
       if (!m.variant) continue;
-      // 切れ目なく続く並びでは、あいだの空白・改行を除いた英字だけで示す
-      const shown = mode === 'joined' ? m.text.replace(/[^A-Za-z]/g, '') : m.text.replace(/\s+/g, ' ');
+      const shown = m.split ? m.text.replace(/[^A-Za-z]/g, '') : m.text.replace(/\s+/g, ' ');
       const key = shown.toLowerCase();
       if (seen.has(key)) continue;
       seen.add(key);
@@ -187,52 +199,9 @@
     return { ...result, mode, auto: requested === 'auto', variants };
   }
 
-  function findWords(source, digits) {
-    const tokens = [...source.matchAll(/\p{L}+/gu)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
-    const matches = [];
-    for (let i = 0; i < tokens.length; i++) {
-      const tok = tokens[i];
-      const lower = tok.text.toLowerCase();
-      if (lower === 'x' && i + 1 < tokens.length && tokens[i + 1].text.toLowerCase() === 'ray'
-        && X_JOINS.test(source.slice(tok.end, tokens[i + 1].start))) {
-        const end = tokens[i + 1].end;
-        const found = source.slice(tok.start, end);
-        matches.push({ start: tok.start, end, text: found, char: 'X', canon: 'X-ray', kind: 'letter',
-          variant: /^x-ray$/i.test(found) ? null : 'spelling' });
-        i += 1;
-        continue;
-      }
-      if (lower === 'xray') {
-        matches.push({ start: tok.start, end: tok.end, text: tok.text, char: 'X', canon: 'X-ray', kind: 'letter', variant: 'spelling' });
-        continue;
-      }
-      const entry = FIND_WORDS.get(lower) || (digits ? DIGIT_WORDS.get(lower) : undefined);
-      if (entry) matches.push({ start: tok.start, end: tok.end, text: tok.text, ...entry });
-    }
-    // 続けて並んだ語のまとまり：あいだが空白・句読点・改行だけなら同じまとまり
-    const runs = [];
-    let current = [];
-    matches.forEach((m, k) => {
-      if (k > 0 && GAP_IN_RUN.test(source.slice(matches[k - 1].end, m.start))) current.push(k);
-      else { if (current.length) runs.push(current); current = [k]; }
-    });
-    if (current.length) runs.push(current);
-    const sequences = runs.filter((r) => r.length >= 2);
-    const singles = runs.filter((r) => r.length === 1).map((r) => r[0]);
-    sequences.forEach((r, n) => r.forEach((k) => { matches[k].run = n; matches[k].inSequence = true; }));
-    for (const k of singles) { matches[k].run = null; matches[k].inSequence = false; }
-    const decodedRuns = sequences.map((r) => r.map((k) => matches[k].char).join(''));
-    return { matches, sequences, singles, decodedRuns, decoded: decodedRuns.join(' '), unread: [], parts: [] };
-  }
-
-  // 英字が切れ目なく続く並び：英字（A〜Z）だけを1本につなぎ、通話表の語（綴りの揺れ・数字の語を含む）に区切る。
-  // 区切り方は、読めない文字が最も少なくなるもの（同じなら語の数が少ないもの）を動的計画法で選ぶ。
-  // 読めない文字が続いた部分は「読めない部分」として1つにまとめ、英字の列ではその部分ごとに「?」を1つ置く。推測では埋めない
-  const JOINED_MAX = 8; // 通話表の語の最長（November・Whiskey などは8文字以下）
-  function findJoined(source, digits) {
-    const pos = [];
-    let letters = '';
-    for (const m of source.matchAll(/[A-Za-z]/g)) { pos.push(m.index); letters += m[0].toLowerCase(); }
+  // 英字の並び（小文字）を通話表の語に区切る。読めない文字が最も少なく、同じなら語の数が少ない区切りを動的計画法で選ぶ。
+  // 返すのは区切りの並び：{ from, to, word }（word が null の区切りは読めない1文字）
+  function segmentLetters(letters, digits) {
     const dict = new Map(FIND_WORDS);
     dict.set('xray', { char: 'X', canon: 'X-ray', variant: null, kind: 'letter' });
     if (digits) for (const [w, e] of DIGIT_WORDS) dict.set(w, e);
@@ -241,7 +210,6 @@
     best[0] = { cost: 0, words: 0, prev: -1, word: null };
     const better = (a, b) => !b || a.cost < b.cost || (a.cost === b.cost && a.words < b.words);
     for (let i = 0; i < n; i++) {
-      if (!best[i]) continue;
       const skip = { cost: best[i].cost + 1, words: best[i].words, prev: i, word: null };
       if (better(skip, best[i + 1])) best[i + 1] = skip;
       for (let len = 2; len <= JOINED_MAX && i + len <= n; len++) {
@@ -253,26 +221,99 @@
     }
     const steps = [];
     for (let j = n; j > 0; j = best[j].prev) steps.push({ from: best[j].prev, to: j, word: best[j].word });
-    steps.reverse();
+    return steps.reverse();
+  }
+
+  // 区切りの並びを、語（matches に足す）と読めない部分（続いた読めない文字を1つにまとめる）の並びにする。
+  // pos[i] は i 番目の英字の、元の文での位置
+  function piecesOf(steps, pos, source) {
+    const span = (from, to) => ({ start: pos[from], end: pos[to - 1] + 1, text: source.slice(pos[from], pos[to - 1] + 1) });
+    const pieces = [];
+    for (const step of steps) {
+      const last = pieces[pieces.length - 1];
+      if (step.word) pieces.push({ ...span(step.from, step.to), ...step.word, kind: 'word', split: true });
+      else if (last && last.kind === 'unread') Object.assign(last, span(last.from, step.to), { letters: last.letters + 1 });
+      else pieces.push({ kind: 'unread', ...span(step.from, step.to), from: step.from, letters: 1 });
+    }
+    return pieces;
+  }
+
+  // 語と読めない部分の並び（元の文の順）から、結果の形にまとめる。
+  // groups は「続けて並んだ語のまとまり」の候補（部品の番号の配列）。2つ以上の部品からなるまとまりだけを英字の列に入れる
+  function assemble(pieces, groups) {
     const matches = [];
     const unread = [];
-    const parts = [];
-    const span = (from, to) => ({ start: pos[from], end: pos[to - 1] + 1, text: source.slice(pos[from], pos[to - 1] + 1) });
-    for (const step of steps) {
-      if (step.word) {
-        matches.push({ ...span(step.from, step.to), ...step.word, run: 0, inSequence: true });
-        parts.push({ kind: 'word', k: matches.length - 1 });
-      } else if (parts.length && parts[parts.length - 1].kind === 'unread') {
-        const u = unread[unread.length - 1];
-        Object.assign(u, span(u.from, step.to), { letters: u.letters + 1 });
-      } else {
-        unread.push({ ...span(step.from, step.to), from: step.from, letters: 1 });
-        parts.push({ kind: 'unread', u: unread.length - 1 });
+    const parts = pieces.map((p) => {
+      if (p.kind === 'word') {
+        const { kind, ...m } = p;
+        matches.push(m);
+        return { kind: 'word', k: matches.length - 1 };
+      }
+      unread.push({ start: p.start, end: p.end, text: p.text, letters: p.letters });
+      return { kind: 'unread', u: unread.length - 1 };
+    });
+    const runParts = groups.filter((g) => g.length >= 2).map((g) => g.map((i) => parts[i]));
+    const sequences = runParts.map((r) => r.filter((p) => p.kind === 'word').map((p) => p.k)).filter((r) => r.length);
+    sequences.forEach((r, n) => r.forEach((k) => { matches[k].run = n; matches[k].inSequence = true; }));
+    const singles = [];
+    for (const g of groups) {
+      if (g.length === 1 && parts[g[0]].kind === 'word') {
+        const k = parts[g[0]].k;
+        matches[k].run = null;
+        matches[k].inSequence = false;
+        singles.push(k);
       }
     }
-    const sequences = matches.length ? [matches.map((_, k) => k)] : [];
-    const decoded = parts.map((p) => (p.kind === 'word' ? matches[p.k].char : '?')).join('');
-    return { matches, sequences, singles: [], decodedRuns: decoded ? [decoded] : [], decoded, unread, parts };
+    const decodedRuns = runParts.map((r) => r.map((p) => (p.kind === 'word' ? matches[p.k].char : '?')).join(''));
+    return { matches, unread, parts, runParts, sequences, singles, decodedRuns, decoded: decodedRuns.join(' '), splitTokens: 0 };
+  }
+
+  // 単語ごとに読む。splitLong が真なら、LONG_TOKEN 文字以上で通話表の語でないまとまりを区切ってみる
+  function findWords(source, digits, splitLong) {
+    const tokens = [...source.matchAll(/\p{L}+/gu)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
+    const pieces = [];
+    let splitTokens = 0;
+    for (let i = 0; i < tokens.length; i++) {
+      const tok = tokens[i];
+      const lower = tok.text.toLowerCase();
+      if (lower === 'x' && i + 1 < tokens.length && tokens[i + 1].text.toLowerCase() === 'ray'
+        && X_JOINS.test(source.slice(tok.end, tokens[i + 1].start))) {
+        const end = tokens[i + 1].end;
+        const found = source.slice(tok.start, end);
+        pieces.push({ kind: 'word', start: tok.start, end, text: found, char: 'X', canon: 'X-ray', variant: /^x-ray$/i.test(found) ? null : 'spelling' });
+        i += 1;
+        continue;
+      }
+      if (lower === 'xray') {
+        pieces.push({ kind: 'word', start: tok.start, end: tok.end, text: tok.text, char: 'X', canon: 'X-ray', variant: 'spelling' });
+        continue;
+      }
+      const entry = FIND_WORDS.get(lower) || (digits ? DIGIT_WORDS.get(lower) : undefined);
+      if (entry) { pieces.push({ start: tok.start, end: tok.end, text: tok.text, ...entry, kind: 'word', wordKind: entry.kind }); continue; }
+      if (splitLong && /^[A-Za-z]+$/.test(tok.text) && tok.text.length >= LONG_TOKEN) {
+        const pos = Array.from(tok.text, (_, k) => tok.start + k);
+        const split = piecesOf(segmentLetters(lower, digits), pos, source);
+        const read = split.filter((p) => p.kind === 'word').reduce((a, p) => a + p.text.length, 0);
+        if (read / tok.text.length >= LONG_TOKEN_MIN) { pieces.push(...split); splitTokens += 1; }
+      }
+    }
+    // 続けて並んだ語のまとまり：あいだが空白・句読点・改行だけなら同じまとまり
+    const groups = [];
+    pieces.forEach((p, i) => {
+      if (i > 0 && GAP_IN_RUN.test(source.slice(pieces[i - 1].end, p.start))) groups[groups.length - 1].push(i);
+      else groups.push([i]);
+    });
+    return { ...assemble(pieces, groups), splitTokens };
+  }
+
+  // 英字が切れ目なく続く並び：英字（A〜Z）だけを1本につなぎ、通話表の語（綴りの揺れ・数字の語を含む）に区切る。
+  // 読めない文字が続いた部分は「読めない部分」として1つにまとめ、英字の列ではその部分ごとに「?」を1つ置く。推測では埋めない
+  function findJoined(source, digits) {
+    const pos = [];
+    let letters = '';
+    for (const m of source.matchAll(/[A-Za-z]/g)) { pos.push(m.index); letters += m[0].toLowerCase(); }
+    const pieces = piecesOf(segmentLetters(letters, digits), pos, source);
+    return assemble(pieces, pieces.length ? [pieces.map((_, i) => i)] : []);
   }
 
   // 入力欄の空白（半角・全角・タブ）と改行を取り除く。count は取り除いた数（CRLF は改行1つ）
@@ -372,7 +413,8 @@
 
   return Object.freeze({
     MAX_SPELL, MAX_FIND, RATES, GAP_MS, COMMON_SPELLINGS, LETTER_SPELLINGS, DIGIT_MODES, LETTERS, DIGITS, SYMBOLS, SPACE_WORD, CAPITAL, SMALL, SPEECH_REPLACE,
-    speechText, clampText, spell, countTypes, copyLine, speechQueue, FIND_MODES, detectMode, find, findQueue, removeSpaces, removeLineBreaks,
+    speechText, clampText, spell, countTypes, copyLine, speechQueue,
+    FIND_MODES, AUTO_JOINED_MIN, AUTO_JOINED_MARGIN, LONG_TOKEN, LONG_TOKEN_MIN, detectMode, readRatio, find, findQueue, removeSpaces, removeLineBreaks,
     pickVoice, phrases, formatNumber,
   });
 }));

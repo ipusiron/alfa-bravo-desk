@@ -398,9 +398,7 @@
       box.setAttribute('lang', 'en');
       const parts = [];
       let last = 0;
-      const spans = r.mode === 'joined'
-        ? r.parts.map((p) => (p.kind === 'word' ? { ...r.matches[p.k], k: p.k } : { ...r.unread[p.u], unread: true }))
-        : r.matches.map((m, k) => ({ ...m, k }));
+      const spans = r.parts.map((p) => (p.kind === 'word' ? { ...r.matches[p.k], k: p.k } : { ...r.unread[p.u], unread: true }));
       for (const m of spans) {
         if (m.start > last) parts.push(text.slice(last, m.start));
         parts.push(m.unread ? E('mark', { class: 'unread' }, m.text, E('sup', null, '?'))
@@ -415,24 +413,20 @@
     const countLine = joined ? t('foundCountJoined', { n: r.matches.length, m: r.unread.length })
       : t(r.matches.length === 1 ? 'foundCountOne' : 'foundCount', { n: r.matches.length, seq, single: r.singles.length });
     $('find-count').textContent = text ? (r.matches.length || r.unread.length ? countLine : t('noneFound')) : '';
-    const modeKey = (joined ? 'modeJoined' : 'modeWords') + (r.auto ? 'Auto' : '');
-    $('find-mode-line').replaceChildren(text ? words(t(modeKey)) : '');
-    const lettersOf = (s) => s.replace(/[^A-Za-z]/g, '');
+    const modeKey = joined ? (r.auto ? 'modeJoinedAuto' : 'modeJoined')
+      : (r.auto ? 'modeWordsAuto' : 'modeWords') + (r.splitTokens ? 'Split' : '');
+    $('find-mode-line').replaceChildren(text ? words(t(modeKey, { n: r.splitTokens })) : '');
+    // 区切って読んだ語は、あいだの空白・改行を除いた英字だけで示す
+    const shownOf = (m) => (m.split ? m.text.replace(/[^A-Za-z]/g, '') : m.text.replace(/\s+/g, ' '));
     const decoded = [];
-    if (joined) {
-      for (const p of r.parts) {
+    r.runParts.forEach((run, n) => {
+      if (n) decoded.push(E('span', { class: 'gap', 'aria-hidden': 'true' }));
+      for (const p of run) {
         decoded.push(p.kind === 'word'
-          ? E('span', { class: 'decoded-item', 'data-k': p.k }, E('b', null, r.matches[p.k].char), E('small', null, lettersOf(r.matches[p.k].text)))
-          : E('span', { class: 'decoded-item unread' }, E('b', null, '?'), E('small', null, lettersOf(r.unread[p.u].text))));
+          ? E('span', { class: 'decoded-item', 'data-k': p.k }, E('b', null, r.matches[p.k].char), E('small', null, shownOf(r.matches[p.k])))
+          : E('span', { class: 'decoded-item unread' }, E('b', null, '?'), E('small', null, r.unread[p.u].text.replace(/[^A-Za-z]/g, ''))));
       }
-    } else {
-      r.sequences.forEach((s, n) => {
-        if (n) decoded.push(E('span', { class: 'gap', 'aria-hidden': 'true' }));
-        for (const k of s) {
-          decoded.push(E('span', { class: 'decoded-item', 'data-k': k }, E('b', null, r.matches[k].char), E('small', null, r.matches[k].text)));
-        }
-      });
-    }
+    });
     if (!decoded.length) decoded.push(words(t('decodedEmpty')));
     $('decoded').replaceChildren(...decoded);
     $('decoded-line').textContent = r.decoded;
@@ -441,8 +435,8 @@
     const singles = r.singles.map((k) => E('li', null, t('singleItem', { word: r.matches[k].text.replace(/\s+/g, ' '), ch: r.matches[k].char })));
     $('singles').replaceChildren(...(singles.length ? singles : [E('li', { class: 'empty' }, t('singlesEmpty'))]));
     $('singles-block').hidden = joined;
-    $('unread-block').hidden = !joined;
-    const unread = r.unread.map((u) => E('li', null, t('unreadItem', { text: lettersOf(u.text), n: u.letters })));
+    $('unread-block').hidden = !joined && !r.unread.length;
+    const unread = r.unread.map((u) => E('li', null, t('unreadItem', { text: u.text.replace(/[^A-Za-z]/g, ''), n: u.letters })));
     $('unread').replaceChildren(...(unread.length ? unread : [E('li', { class: 'empty' }, t('unreadEmpty'))]));
     refreshTidyButtons();
     const rows = r.variants.map((v) => E('tr', null, E('td', null, v.text),
