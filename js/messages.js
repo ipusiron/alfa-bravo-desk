@@ -48,6 +48,7 @@
     noVoice: 'この端末には読み上げの声がないため、読み上げられません。',
     noSpeech: 'このブラウザーは読み上げに対応していません。',
     noticeLabel: '注意',
+    voiceHowToSummary: '英語の声の足し方を見る',
     voiceJa: 'この端末には英語の声がないため、日本語の声で読みます（発音は日本語の読み方になります）。',
     voiceOther: 'この端末には英語の声も日本語の声もないため、端末にあるほかの言語の声で読みます（発音はその言語の読み方になります）。',
     voiceHowTo: '英語の声の足し方：Windows 10は、設定の「時刻と言語」→「音声認識」→「音声の追加」でEnglish (United States)を追加し、'
@@ -68,8 +69,8 @@
     spellingLegend: '英字の綴り',
     spellingOfficial: '原典どおり',
     spellingCommon: '英語でよく見る綴り',
-    spellingNoteOfficial: 'ICAOの表と無線局運用規則のとおり、Alfa・Juliett・X-ray・Whiskeyと綴ります。',
-    spellingNoteCommon: '英語でよく見るAlpha・Juliet・Xray・Whiskyと綴ります。原典の綴りとは違います。',
+    spellingNoteOfficial: '原典は、国際民間航空機関（ICAO）と日本の無線局運用規則の通話表のことです。原典どおりに、Alfa・Juliett・X-ray・Whiskeyと綴ります。',
+    spellingNoteCommon: '英語でよく見るAlpha・Juliet・Xray・Whiskyと綴ります。原典（ICAOと無線局運用規則の通話表）の綴りとは違います。',
     digitLegend: '数字の読み方',
     digitPlain: 'ふつうの英語',
     digitIcao: 'ICAO式・原典の綴り',
@@ -85,13 +86,11 @@
     partDigit: '数字{n}',
     partSymbol: '記号{n}',
     partSpace: '空白{n}',
-    partUnnamed: '名前のない記号{n}',
     partOther: 'そのほか{n}',
     partLetterOne: '英字{n}',
     partDigitOne: '数字{n}',
     partSymbolOne: '記号{n}',
     partSpaceOne: '空白{n}',
-    partUnnamedOne: '名前のない記号{n}',
     partOtherOne: 'そのほか{n}',
     englishNote: '読み上げとコピーは英語です（大文字の＝Capital、小文字の＝Small）。',
     colOrder: '順',
@@ -116,9 +115,11 @@
     sayCase: '読み上げで大文字・小文字も言う',
     switchOn: 'オン',
     switchOff: 'オフ',
+    switchUnavailable: '使えません',
     sayCaseNoteOn: 'オフにすると、声だけCapital・Smallを言いません（表とコピーはそのままです）。',
     sayCaseNoteOff: '「大文字と小文字」を「区別しない」にしているため、使えません。',
     copyLabel: '読み方を1行にまとめたもの（英語）',
+    copyNote: '名前のない記号と読み替えのない文字は、そのまま写します。',
     copySpell: '読み方をコピー',
 
     // ===== タブ2 =====
@@ -126,7 +127,7 @@
     findLead2: '2語以上続けて並んだ単語だけを英字の列に入れます。前後に続く単語がなく、1語だけで見つかった単語は「単独で見つかった語」に出します。',
     findInputLabel: '文章',
     exampleButton: '例を入れる（ふつうの英文）',
-    exampleJoinedButton: '例を入れる（区切りのない並び）',
+    exampleJoinedButton: '例を入れる（1文字ずつ区切った並び）',
     exampleText: 'The code is Alpha bravo seven Niner, then X ray Echo. Meet me at the hotel.',
     exampleJoinedText: 'S I E R R A E C H O C H A R L I\n'
       + 'E R O M E O E C H O T A N G O P\n'
@@ -136,7 +137,8 @@
     removeBreaks: '改行を消す',
     undoRemove: '元に戻す',
     removeNote: '1文字ずつ空白や改行で区切った並びは、空白と改行を消すと1本の英字の並びになります。'
-      + 'そのままでも、消したあとでも、通話表の単語に区切って読みます。',
+      + 'そのままでも、消したあとでも、通話表の単語に区切って読みます。ふつうの英文で空白を消すと、単語の切れ目がなくなります。',
+    removedFewer: '見つかった語が減りました。「元に戻す」で戻せます。',
     removedSpaces: '空白を{n}個消しました。',
     removedBreaks: '改行を{n}個消しました。',
     undone: '元に戻しました。',
@@ -162,6 +164,7 @@
     foundHeading: '見つかった単語',
     findEmpty: 'まだ文章がありません。上の欄に貼るか、「例を入れる」を押してください。',
     noneFound: '通話表の単語は見つかりませんでした。',
+    findHintJoined: '区切りのない英字の並びなら、「読み方」で「英字の並びを区切る」を選ぶと、通話表の単語に区切って読みます。',
     foundCount: '見つかった数：{n}語（続けて並んだ語{seq}・単独の語{single}）',
     foundCountOne: '見つかった数：{n}語（続けて並んだ語{seq}・単独の語{single}）',
     markLegend: '色の付いた印は続けて並んだ語、点線の印は単独で見つかった語、赤い枠の印は読めない部分です。印の右上の文字は、その語が表す文字です。',
@@ -187,13 +190,15 @@
 
     // ===== タブ3 =====
     refLead: 'カードを押すと、その単語を英語の声で読み上げます。カタカナは読み方の目安です。'
-      + '「別の綴り」は英語でよく見る綴りで、原典の綴りとは違います。',
+      + '「別の綴り」は英語でよく見る綴りで、原典（ICAOと無線局運用規則の通話表）の綴りとは違います。',
     lettersHeading: '英字（A〜Z）',
     digitsHeading: '数字（0〜9）',
     icaoLabel: 'ICAO式',
     altLabel: '別の綴り',
+    icaoSame: 'ICAO式も同じ',
     digitsNote: 'ICAO式の綴りは、ICAOの表や無線局運用規則にある数字の発音の表記をもとにしています（3はTREE、9はNIN-erなど）。',
     cardSpeak: '{ch}：{word}を読み上げる',
+    cardSpeakIcao: '{word}を読み上げる（ICAO式）',
     refReading: '{word}を読んでいます',
     studyHeading: '座学',
     study1Title: '何のための表か',
@@ -209,6 +214,8 @@
     study2Title: 'ICAOとNATO',
     study2Body: 'いま広く使われている通話表は、国際民間航空機関（ICAO）が定めたものです。'
       + 'ICAOは1951年11月1日にこの表を採用し、5つの単語を入れ替えた最終版を1956年3月1日から使っています。'
+      // 入れ替える前の語（Coca・Metro・Nectar・Union・Extra）の出典：ICAO の Annex 10 の沿革のページ
+      + '入れ替える前の語は、CがCoca、MがMetro、NがNectar、UがUnion、XがExtraで、いまはCharlie・Mike・November・Uniform・X-rayです。'
       + '北大西洋条約機構（NATO）も同じ表を使うため、NATOフォネティックコードとも呼ばれます。',
     study2Head1: '年月日',
     study2Head2: 'できごと',
@@ -325,6 +332,7 @@
     noVoice: 'This device has no voice for reading aloud, so nothing can be read aloud.',
     noSpeech: 'This browser cannot read text aloud.',
     noticeLabel: 'Note',
+    voiceHowToSummary: 'How to add an English voice',
     voiceJa: 'This device has no English voice, so a Japanese voice reads the words (with Japanese pronunciation).',
     voiceOther: 'This device has neither an English nor a Japanese voice, so another voice on the device reads the words '
       + '(with the pronunciation of its language).',
@@ -346,8 +354,9 @@
     spellingLegend: 'Letter spelling',
     spellingOfficial: 'As in the standard',
     spellingCommon: 'Common English',
-    spellingNoteOfficial: 'Spelled as in the ICAO table and the Japanese rules: Alfa, Juliett, X-ray, Whiskey.',
-    spellingNoteCommon: 'Spelled the common English way: Alpha, Juliet, Xray, Whisky. This differs from the standard.',
+    spellingNoteOfficial: 'The standard means the tables of the International Civil Aviation Organization (ICAO) and the Japanese Radio Station '
+      + 'Operation Rules. Spelled as in the standard: Alfa, Juliett, X-ray, Whiskey.',
+    spellingNoteCommon: 'Spelled the common English way: Alpha, Juliet, Xray, Whisky. This differs from the standard (the ICAO and Japanese tables).',
     digitLegend: 'Digits',
     digitPlain: 'Plain English',
     digitIcao: 'ICAO, standard spelling',
@@ -363,13 +372,11 @@
     partDigit: '{n} digits',
     partSymbol: '{n} symbols',
     partSpace: '{n} spaces',
-    partUnnamed: '{n} symbols without a name',
     partOther: '{n} others',
     partLetterOne: '{n} letter',
     partDigitOne: '{n} digit',
     partSymbolOne: '{n} symbol',
     partSpaceOne: '{n} space',
-    partUnnamedOne: '{n} symbol without a name',
     partOtherOne: '{n} other',
     englishNote: 'Reading aloud and copying are in English.',
     colOrder: 'No.',
@@ -394,9 +401,11 @@
     sayCase: 'Say capital / small',
     switchOn: 'On',
     switchOff: 'Off',
+    switchUnavailable: 'Unavailable',
     sayCaseNoteOn: 'When off, only the voice leaves out "Capital" and "Small"; the table and the copy stay the same.',
     sayCaseNoteOff: 'Not available while capital and small letters are ignored.',
     copyLabel: 'The readings on one line (English)',
+    copyNote: 'Symbols without a name and characters without a code word are copied as they are.',
     copySpell: 'Copy the readings',
 
     findLead: 'Paste a text, and the code words in it are marked, and the letters they stand for are put in a line. '
@@ -405,7 +414,7 @@
       + 'A word with no code word next to it is listed under "Words found alone".',
     findInputLabel: 'Text',
     exampleButton: 'Example: ordinary English',
-    exampleJoinedButton: 'Example: letters without breaks',
+    exampleJoinedButton: 'Example: letters one by one',
     exampleText: 'The code is Alpha bravo seven Niner, then X ray Echo. Meet me at the hotel.',
     exampleJoinedText: 'S I E R R A E C H O C H A R L I\n'
       + 'E R O M E O E C H O T A N G O P\n'
@@ -415,7 +424,8 @@
     removeBreaks: 'Remove line breaks',
     undoRemove: 'Undo',
     removeNote: 'Letters separated one by one with spaces or line breaks become one unbroken run when you remove them. '
-      + 'Either way, the run is split into code words.',
+      + 'Either way, the run is split into code words. Removing the spaces from ordinary English removes the breaks between words.',
+    removedFewer: 'Fewer words were found. Undo brings the text back.',
     removedSpaces: 'Removed {n} spaces.',
     removedBreaks: 'Removed {n} line breaks.',
     undone: 'Undone.',
@@ -442,6 +452,7 @@
     foundHeading: 'Words found',
     findEmpty: 'No text yet. Paste one in the box above, or press Put in an example.',
     noneFound: 'No code words were found.',
+    findHintJoined: 'If this is a run of letters without breaks, choose "Split a run of letters" under How to read to split it into code words.',
     foundCount: 'Found: {n} words ({seq} in a row, {single} alone)',
     foundCountOne: 'Found: {n} word ({seq} in a row, {single} alone)',
     markLegend: 'A filled mark is a word in a row; a dotted mark is a word found alone; a red frame is an unreadable part. '
@@ -472,9 +483,11 @@
     digitsHeading: 'Digits (0 to 9)',
     icaoLabel: 'ICAO',
     altLabel: 'Also',
+    icaoSame: 'Same in ICAO',
     digitsNote: 'The ICAO spellings follow the pronunciation given for digits by ICAO and by the Japanese Radio Station Operation Rules '
       + '(TREE for 3, NIN-er for 9 and so on).',
     cardSpeak: '{ch}: read {word} aloud',
+    cardSpeakIcao: 'Read {word} aloud (ICAO)',
     refReading: 'Reading {word}',
     studyHeading: 'Background',
     study1Title: 'What the alphabet is for',
@@ -490,6 +503,7 @@
     study2Title: 'ICAO and NATO',
     study2Body: 'The alphabet in wide use today was set by the International Civil Aviation Organization (ICAO). '
       + 'ICAO adopted it on 1 November 1951, and has used the final version, with five words replaced, since 1 March 1956. '
+      + 'The words replaced were C (Coca to Charlie), M (Metro to Mike), N (Nectar to November), U (Union to Uniform) and X (Extra to X-ray). '
       + 'NATO uses the same alphabet, so it is also called the NATO phonetic alphabet.',
     study2Head1: 'Date',
     study2Head2: 'Event',

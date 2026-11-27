@@ -153,13 +153,17 @@
   }
   // X-ray の形：つないだ1語（xray）と、空白・ハイフン・改行を1つはさむ形（x ray／x-ray／x↵ray）
   const X_JOINS = /^(?: |-|\r?\n)$/;
-  const GAP_IN_RUN = /^[\s\p{P}]*$/u;
+  // 続けて並んだ語のあいだにあってよいもの：空白・改行・読点（, 、）・ハイフン。文の終わりの記号（. ! ? ; :）などがあれば、まとまりを分ける
+  const GAP_IN_RUN = /^[\s,、\-‐–—]*$/u;
 
   // 読み方：'words'＝単語ごと（単語の間に空白がある文章）、'joined'＝英字が切れ目なく続く並び（1文字ずつ空白・改行で区切った並びを含む）
   const FIND_MODES = Object.freeze(['auto', 'words', 'joined']);
   // 自動の判断：英字が切れ目なく続く並びとして読んだとき、読めた英字の割合が AUTO_JOINED_MIN 以上で、
   // 単語ごとに読んだとき（長いまとまりを区切らない読み方）より AUTO_JOINED_MARGIN 以上多ければ、切れ目なく続く並びとして読む
   const AUTO_JOINED_MIN = 0.7;
+  // 単語ごとに読んで1語も読めないときは、英字の並びとして AUTO_JOINED_MIN_WHEN_NONE 以上読めれば、英字の並びとして読む
+  // （区切りのない並びに、通話表にない語が混じったとき）
+  const AUTO_JOINED_MIN_WHEN_NONE = 0.4;
   const AUTO_JOINED_MARGIN = 0.2;
   // 単語ごとに読むときも、LONG_TOKEN 文字以上のまとまり（通話表の語より長い）は区切ってみて、LONG_TOKEN_MIN 以上読めたら区切った結果を使う
   const LONG_TOKEN = 9;
@@ -178,7 +182,13 @@
     const source = String(text);
     const words = readRatio(findWords(source, digits, false), source);
     const joined = readRatio(findJoined(source, digits), source);
-    return joined >= AUTO_JOINED_MIN && joined - words >= AUTO_JOINED_MARGIN ? 'joined' : 'words';
+    if (joined >= AUTO_JOINED_MIN && joined - words >= AUTO_JOINED_MARGIN) return 'joined';
+    // ただし、英字の並びらしい形（LONG_TOKEN 文字以上のまとまりがあるか、まとまりの8割以上が1文字）のときだけ。
+    // ふつうの単語が並ぶだけの文（Hotels Golfer など）は、区切って読まない
+    const tokens = source.match(/[A-Za-z]+/g) || [];
+    const runLike = tokens.some((t) => t.length >= LONG_TOKEN) || (tokens.length >= 4 && tokens.filter((t) => t.length === 1).length / tokens.length >= 0.8);
+    if (runLike && joined >= AUTO_JOINED_MIN_WHEN_NONE && findWords(source, digits, true).matches.length === 0) return 'joined';
+    return 'words';
   }
 
   function find(text, options = {}) {
@@ -425,7 +435,8 @@
   return Object.freeze({
     MAX_SPELL, MAX_FIND, RATES, GAP_MS, COMMON_SPELLINGS, LETTER_SPELLINGS, DIGIT_MODES, LETTERS, DIGITS, SYMBOLS, SPACE_WORD, CAPITAL, SMALL, SPEECH_REPLACE,
     speechText, clampText, spell, countTypes, copyLine, speechQueue,
-    FIND_MODES, AUTO_JOINED_MIN, AUTO_JOINED_MARGIN, LONG_TOKEN, LONG_TOKEN_MIN, detectMode, readRatio, find, findQueue, removeSpaces, removeLineBreaks,
+    FIND_MODES, AUTO_JOINED_MIN, AUTO_JOINED_MARGIN, AUTO_JOINED_MIN_WHEN_NONE,
+    LONG_TOKEN, LONG_TOKEN_MIN, detectMode, readRatio, find, findQueue, removeSpaces, removeLineBreaks,
     pickVoice, voiceKind, phrases, formatNumber,
   });
 }));

@@ -129,9 +129,10 @@
           </fieldset>
           <p id="spell-status" class="status speak-status" aria-live="polite"></p>
         </div>
-        <p id="spell-voice-note" class="voice-notice" role="status" hidden></p>
+        <div id="spell-voice-note" class="voice-notice" role="status" hidden></div>
         <div class="copy-box">
           <p class="copy-label" data-i18n="copyLabel">読み方を1行にまとめたもの（英語）</p>
+          <p class="copy-note" data-i18n="copyNote">名前のない記号と読み替えのない文字は、そのまま写します。</p>
           <p id="spell-copy-text" class="copy-text" lang="en"></p>
         </div>
         <div class="actions">
@@ -163,7 +164,7 @@
         <div class="row">
           <fieldset class="seg">
             <legend data-i18n="findModeLegend">読み方</legend>
-            <div class="seg-buttons">
+            <div class="seg-buttons seg-three">
               <button type="button" aria-pressed="true" data-findmode="auto" data-i18n="findModeAuto">自動</button>
               <button type="button" aria-pressed="false" data-findmode="words" data-i18n="findModeWords">単語ごと</button>
               <button type="button" aria-pressed="false" data-findmode="joined" data-i18n="findModeJoined">英字の並びを区切る</button>
@@ -182,6 +183,7 @@
           <span id="find-count" class="status"></span>
         </div>
         <p id="find-mode-line" class="mode-line"></p>
+        <p id="find-hint" class="find-hint" hidden></p>
         <p class="seg-note" data-i18n="markLegend">色の付いた印は続けて並んだ語、点線の印は単独で見つかった語です。</p>
         <div id="find-text" class="found-text" lang="en"></div>
         <h3 data-i18n="decodedHeading">戻した英字の列</h3>
@@ -203,7 +205,7 @@
           </fieldset>
           <p id="find-status" class="status speak-status" aria-live="polite"></p>
         </div>
-        <p id="find-voice-note" class="voice-notice" role="status" hidden></p>
+        <div id="find-voice-note" class="voice-notice" role="status" hidden></div>
         <p id="find-copy-status" class="status" aria-live="polite"></p>
         <div id="singles-block">
           <h3 data-i18n="singlesHeading">単独で見つかった語</h3>
@@ -232,7 +234,7 @@
       <section id="panel-reference" class="panel" role="tabpanel" aria-labelledby="tab-reference" hidden>
         <h2 data-i18n="tabReference">一覧と座学</h2>
         <p class="lead" data-i18n="refLead">カードを押すと、その単語を英語の声で読み上げます。カタカナは読み方の目安です。</p>
-        <p id="ref-voice-note" class="voice-notice" role="status" hidden></p>
+        <div id="ref-voice-note" class="voice-notice" role="status" hidden></div>
         <p id="ref-status" class="status speak-status" aria-live="polite"></p>
         <h3 data-i18n="lettersHeading">英字（A〜Z）</h3>
         <div id="letter-grid" class="letter-grid"></div>

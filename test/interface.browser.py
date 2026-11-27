@@ -243,8 +243,10 @@ def test_layout(browser, url, width, height, language, theme, name):
                 check(abs(page.evaluate(head) - start) < 1, (name, "switch moved the result", button))
                 check(overflow(page) <= 0, (name, "sideways scroll after", button))
         if tab == "reference":
-            heights = page.evaluate("[...new Set([...document.querySelectorAll('.letter-card')].map(e => Math.round(e.offsetHeight)))]")
-            check(len(heights) == 1, (name, "cards of different heights", heights))
+            # In each grid, the cards (with the ICAO button of a digit) have one height
+            for grid in ("letter-grid", "digit-grid"):
+                heights = page.evaluate(f"[...new Set([...document.getElementById('{grid}').children].map(e => Math.round(e.offsetHeight)))]")
+                check(len(heights) == 1, (name, grid, "cards of different heights", heights))
         if tab == "find":
             # The run without breaks: the whole find tab still fits the width
             page.click("#find-example-joined")
@@ -334,6 +336,17 @@ def test_speech(browser, url, name):
     page.evaluate("window.__finishUtterance()")
     page.wait_for_timeout(GAP_WAIT_MS)
     check(page.evaluate("document.querySelectorAll('.letter-card.now').length") == 0, (name, "card mark removed"))
+    # The ICAO button of the digit 9 reads Niner
+    page.click("#digit-grid .icao-speak[aria-label^='Niner']")
+    check(log()[-1]["text"] == "Niner", (name, "ICAO button reads Niner", log()[-1]))
+    check(page.evaluate("document.querySelectorAll('#digit-grid .icao-speak').length") == 7, (name, "seven ICAO buttons"))
+    check(page.evaluate("document.querySelector('#digit-grid .icao-speak.now') !== null"), (name, "the ICAO button is marked while reading"))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(page.evaluate("document.querySelectorAll('#digit-grid .now').length") == 0, (name, "ICAO mark removed"))
+    same = page.evaluate("[...document.querySelectorAll('#digit-grid .icao-same')].map(e => e.parentElement.querySelector('.lt').textContent)")
+    check(same == ["0", "6", "7"], (name, "same in ICAO for 0, 6, 7", same))
+    check(page.evaluate("[...document.querySelectorAll('#digit-grid .icao-same')].every(e => e.tagName === 'SPAN')"), (name, "same is not a button"))
     # Copy (the button gives a message either way)
     page.click("#tab-spell")
     page.fill("#spell-input", "Ab")
@@ -365,9 +378,16 @@ def test_spelling_and_find(browser, url, name, output=None):
     check(log()[-1]["text"] == "Alpha", (name, "voice without capital", log()[-1]))
     page.click("#spell-stop")
     check(page.text_content("#spell-copy-text") == "Capital Alpha, Small Juliet, One", (name, "copy keeps capital"))
+    page.click("#spell-copy")
+    page.wait_for_function("() => document.getElementById('spell-copy-status').textContent !== ''")
+    page.fill("#spell-input", "Aj2")
+    page.fill("#spell-input", "Aj1")
+    check(page.text_content("#spell-copy-status") == "", (name, "copy message cleared when the text changes"))
     check(page.evaluate("document.querySelector('#spell-body tr .case').textContent") == "大文字の", (name, "table keeps capital"))
     page.click("#case-off")
     check(page.is_disabled("#say-case"), (name, "switch disabled when ignoring case"))
+    check(page.get_attribute("#say-case", "aria-checked") == "false" and page.text_content("#say-case-state") == "使えません",
+          (name, "the disabled switch shows it cannot be used", page.text_content("#say-case-state")))
     check(page.evaluate("document.querySelector('#say-case-note .on').textContent").startswith("「大文字と小文字」を「区別しない」"), (name, "reason"))
     page.click("#case-on")
     page.click("#say-case")
@@ -398,6 +418,32 @@ def test_spelling_and_find(browser, url, name, output=None):
     page.click("#remove-breaks")
     check(page.text_content("#remove-status") == "改行を3個消しました。", (name, "removed breaks"))
     check(page.text_content("#decoded-line") == "SECRET?KEY?", (name, "same result in one run"))
+    # Undo steps back through each removal, in order
+    page.click("#undo-remove")
+    check("\n" in page.input_value("#find-input") and " " not in page.input_value("#find-input"), (name, "undo 1: line breaks back"))
+    page.click("#undo-remove")
+    check(page.input_value("#find-input") == original and page.is_disabled("#undo-remove"), (name, "undo 2: back to the start"))
+    page.click("#remove-spaces")
+    page.click("#remove-breaks")
+    # Removing spaces from ordinary English: the line says fewer words were found, and Undo brings them back
+    page.fill("#find-input", "Alfa is fine and Bravo is good.")
+    page.click("#remove-spaces")
+    check(page.text_content("#remove-status").endswith("見つかった語が減りました。「元に戻す」で戻せます。"), (name, "fewer words", page.text_content("#remove-status")))
+    page.click("#undo-remove")
+    check(page.input_value("#find-input") == "Alfa is fine and Bravo is good.", (name, "undo brings the words back"))
+    # Nothing found word by word: the line points to "Split a run of letters"
+    page.fill("#find-input", "Hello world")
+    check(page.is_visible("#find-hint") and "英字の並びを区切る" in page.text_content("#find-hint"), (name, "hint when nothing is found"))
+    page.fill("#find-input", "TANGOANGOOSCARKYOTOMIKEECHO")
+    check(page.text_content("#decoded-line") == "T?O?ME" and page.is_hidden("#find-hint"), (name, "a run with unknown words"))
+    # The copy message goes away when the text changes
+    page.click("#find-copy")
+    page.wait_for_function("() => document.getElementById('find-copy-status').textContent !== ''")
+    page.fill("#find-input", "Alfa Bravo")
+    check(page.text_content("#find-copy-status") == "", (name, "find copy message cleared"))
+    page.click("#find-example-joined")
+    page.click("#remove-spaces")
+    page.click("#remove-breaks")
     # Typing drops the undo
     page.type("#find-input", "A")
     check(page.is_disabled("#undo-remove"), (name, "typing drops undo"))
@@ -446,6 +492,8 @@ def test_no_voice(browser, url, name, output=None):
     states = notice_state(page)
     check(all(not hidden and text.startswith("注意" + NOTICE_JA) and "English (United States)" in text for hidden, text in states),
           (name, "Japanese voice notice", states))
+    # How to add an English voice is folded; the band keeps one height while it is closed
+    check(page.evaluate("[...document.querySelectorAll('.voice-notice details')].every(d => !d.open)"), (name, "how-to folded"))
     check(page.is_enabled("#spell-speak"), (name, "speak works with a Japanese voice"))
     top = page.evaluate("document.getElementById('spell-speak').getBoundingClientRect().top + window.scrollY")
     page.click("#spell-speak")

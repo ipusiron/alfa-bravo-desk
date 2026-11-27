@@ -101,6 +101,8 @@ test('例の値：このツールならではの使い方の値を、計算部�
   assert.ok(ja.includes(`ふつう${C.GAP_MS.normal}ミリ秒・ゆっくり${C.GAP_MS.slow}ミリ秒`));
   assert.ok(en.includes(`${C.GAP_MS.normal} ms at Normal and ${C.GAP_MS.slow} ms at Slow`));
   assert.ok(ja.includes(`割合が${C.AUTO_JOINED_MIN}以上`) && ja.includes(`${C.AUTO_JOINED_MARGIN}以上多ければ`));
+  assert.ok(ja.includes(`英字の並びとして${C.AUTO_JOINED_MIN_WHEN_NONE}以上読めれば`));
+  assert.ok(en.includes(`at least ${C.AUTO_JOINED_MIN_WHEN_NONE} of its letters`));
   assert.ok(ja.includes(`${C.LONG_TOKEN}文字以上のまとまりで${C.LONG_TOKEN_MIN * 10}割以上`));
 });
 
