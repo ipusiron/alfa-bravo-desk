@@ -44,11 +44,17 @@ test('X ray：空白・ハイフン・改行を1つはさむ形は1語、2つ以
   assert.deepEqual(C.find('x\nray echo').variants.map((v) => v.text), ['x ray']);
 });
 
-test('続けて並んだ語：あいだが空白・句読点・改行だけならつながり、ほかの語や数字が入れば切れる', () => {
-  const r = C.find('Delta, Echo.\nFoxtrot; the end. Golf 42 Hotel');
-  assert.deepEqual(r.decodedRuns, ['DEF']);
-  assert.deepEqual(texts(r, r.singles), ['Golf', 'Hotel']);
-  assert.equal(r.matches.filter((m) => m.inSequence).length, 3);
+test('続けて並んだ語：あいだが空白・改行・読点・ハイフンだけならつながり、文の終わりの記号やほかの語・数字が入れば切れる', () => {
+  const r = C.find('Delta, Echo\nFoxtrot - Golf. Hotel; India: Juliett! Kilo? Lima 42 Mike');
+  assert.deepEqual(r.decodedRuns, ['DEFG']);
+  assert.deepEqual(texts(r, r.singles), ['Hotel', 'India', 'Juliett', 'Kilo', 'Lima', 'Mike']);
+  assert.equal(r.matches.filter((m) => m.inSequence).length, 4);
+  // 文の終わりで分ける：「at nine.」の nine は次の文の Bravo とつながらない
+  const own = C.find('My call sign is Juliet Alpha One Tree. Please meet me at the hotel at nine. Bravo Charlie Whisky X ray.');
+  assert.equal(own.decoded, 'JA13 BCWX');
+  assert.deepEqual(texts(own, own.singles), ['hotel', 'nine']);
+  // 区切りのない並び（1文字ずつ区切った並びを含む）では、記号をはさんでもつながる
+  assert.equal(C.find('A L F A . B R A V O').decoded, 'AB');
   // 単独の語だけのとき、英字の列は空
   const alone = C.find('I stayed at a hotel.');
   assert.equal(alone.decoded, '');
@@ -208,4 +214,16 @@ test('自動の判断：ふつうの英文は単語ごとのまま、例文2つ�
   assert.deepEqual([ex.mode, ex.decoded, ex.singles.length], ['words', 'AB79 XE', 1]);
   const ex2 = C.find(M.ja.exampleJoinedText);
   assert.deepEqual([ex2.mode, ex2.decoded], ['joined', 'SECRET?KEY?']);
+});
+
+test('自動の判断：単語ごとに1語も読めない並びは、英字の並びとして4割以上読めれば区切る（通話表にない語が混じった並び）', () => {
+  assert.equal(C.AUTO_JOINED_MIN_WHEN_NONE, 0.4);
+  const r = C.find('TANGOANGOOSCARKYOTOMIKEECHO');
+  assert.deepEqual([r.mode, r.decoded], ['joined', 'T?O?ME']);
+  assert.deepEqual(r.unread.map((u) => u.text), ['ANGO', 'KYOTO']);
+  // ふつうの単語が並ぶだけの文は、通話表の語が含まれていても区切らない
+  assert.equal(C.find('Hotels Golfer Cafe').mode, 'words');
+  assert.equal(C.find('Hello world').mode, 'words');
+  // 4割に届かない長い並びは区切らない
+  assert.equal(C.find('QWERTYUIOPASDFGALFA').mode, 'words');
 });

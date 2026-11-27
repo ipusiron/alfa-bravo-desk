@@ -37,7 +37,7 @@
     sayCase: true,
     findDigits: true,
     findMode: 'auto',
-    undo: null,
+    undo: [], // 空白・改行を消す前の文（新しいものが後ろ）
     speed: 'normal',
     spellItems: [],
     findResult: null,
@@ -87,8 +87,9 @@
       const box = $(id);
       box.hidden = !notice;
       if (!notice) { box.replaceChildren(); continue; }
-      box.replaceChildren(E('span', { class: 'notice-label' }, t('noticeLabel')),
-        E('span', { class: 'notice-text' }, words(t(notice.key)), notice.howTo ? E('span', { class: 'notice-howto' }, words(t('voiceHowTo'))) : null));
+      // 1行目（何が起きているか）だけを見せ、英語の声の足し方は「足し方を見る」で開く
+      box.replaceChildren(E('span', { class: 'notice-label' }, t('noticeLabel')), E('span', { class: 'notice-text' }, words(t(notice.key))),
+        notice.howTo ? E('details', { class: 'notice-howto' }, E('summary', null, t('voiceHowToSummary')), E('p', null, words(t('voiceHowTo')))) : null);
     }
   }
 
@@ -273,6 +274,7 @@
   const spellInput = $('spell-input');
   const updateSpellInput = bindLimited(spellInput, Core.MAX_SPELL, 'spell-over', 'spell-counter', () => computeSpell());
   function computeSpell() {
+    $('spell-copy-status').textContent = '';
     state.spellItems = Core.spell(spellInput.value, { caseMode: state.caseMode, digitMode: state.digitMode, letterSpelling: state.letterSpelling });
     renderSpell();
   }
@@ -297,8 +299,8 @@
     }
   }
   const TYPE_KEYS = { letter: 'typeLetter', digit: 'typeDigit', symbol: 'typeSymbol', space: 'typeSpace', unnamed: 'typeUnnamed', other: 'typeOther' };
-  const PART_KEYS = [['letter', 'partLetter'], ['digit', 'partDigit'], ['symbol', 'partSymbol'], ['space', 'partSpace'],
-    ['unnamed', 'partUnnamed'], ['other', 'partOther']];
+  // 文字数の内訳は、表の「種類」の列と同じ分け方（名前のない記号も「記号」に数える）
+  const PART_KEYS = [['letter', 'partLetter'], ['digit', 'partDigit'], ['symbol', 'partSymbol'], ['space', 'partSpace'], ['other', 'partOther']];
   function renderSpell() {
     const items = state.spellItems;
     const rows = items.map((item) => E('tr', { 'data-index': item.index },
@@ -312,6 +314,7 @@
     $('spell-empty').hidden = items.length > 0;
     I18n.setText($('spell-empty'), t('resultEmpty'));
     const counts = Core.countTypes(items);
+    counts.symbol += counts.unnamed;
     const sep = I18n.lang === 'ja' ? '・' : ', ';
     const parts = PART_KEYS.filter(([type]) => counts[type]).map(([type, key]) => t(counts[type] === 1 ? key + 'One' : key, { n: counts[type] })).join(sep);
     $('spell-summary').textContent = items.length ? t(items.length === 1 ? 'resultSummaryOne' : 'resultSummary', { n: items.length, parts }) : '';
@@ -401,29 +404,27 @@
     updateFindInput(true);
     $('remove-status').textContent = status || '';
   }
-  $('find-example').addEventListener('click', () => { state.undo = null; putFindText(t('exampleText')); });
-  $('find-example-joined').addEventListener('click', () => { state.undo = null; putFindText(t('exampleJoinedText')); });
-  // 空白・改行を消す（1段だけ元に戻せる）。手で書き換えたら、元に戻す先は捨てる
-  $('remove-spaces').addEventListener('click', () => {
-    const r = Core.removeSpaces(findInput.value);
-    state.undo = findInput.value;
-    putFindText(r.text, t('removedSpaces', { n: Core.formatNumber(r.count) }));
-  });
-  $('remove-breaks').addEventListener('click', () => {
-    const r = Core.removeLineBreaks(findInput.value);
-    state.undo = findInput.value;
-    putFindText(r.text, t('removedBreaks', { n: Core.formatNumber(r.count) }));
-  });
+  $('find-example').addEventListener('click', () => { state.undo = []; putFindText(t('exampleText')); });
+  $('find-example-joined').addEventListener('click', () => { state.undo = []; putFindText(t('exampleJoinedText')); });
+  // 空白・改行を消す。消した操作は順に元に戻せる（UNDO_MAX 回まで）。手で書き換えたら、元に戻す先は捨てる
+  const UNDO_MAX = 20;
+  function tidy(result, key) {
+    const before = state.findResult ? state.findResult.matches.length : 0;
+    state.undo.push(findInput.value);
+    if (state.undo.length > UNDO_MAX) state.undo.shift();
+    putFindText(result.text, t(key, { n: Core.formatNumber(result.count) }));
+    if (state.findResult.matches.length < before) $('remove-status').textContent += ' ' + t('removedFewer');
+  }
+  $('remove-spaces').addEventListener('click', () => tidy(Core.removeSpaces(findInput.value), 'removedSpaces'));
+  $('remove-breaks').addEventListener('click', () => tidy(Core.removeLineBreaks(findInput.value), 'removedBreaks'));
   $('undo-remove').addEventListener('click', () => {
-    const previous = state.undo;
-    state.undo = null;
-    if (previous !== null) putFindText(previous, t('undone'));
+    if (state.undo.length) putFindText(state.undo.pop(), t('undone'));
   });
-  findInput.addEventListener('input', () => { state.undo = null; $('remove-status').textContent = ''; refreshTidyButtons(); });
+  findInput.addEventListener('input', () => { state.undo = []; $('remove-status').textContent = ''; refreshTidyButtons(); });
   function refreshTidyButtons() {
     $('remove-spaces').disabled = Core.removeSpaces(findInput.value).count === 0;
     $('remove-breaks').disabled = Core.removeLineBreaks(findInput.value).count === 0;
-    $('undo-remove').disabled = state.undo === null;
+    $('undo-remove').disabled = !state.undo.length;
   }
   const modeButtons = [...document.querySelectorAll('[data-findmode]')];
   for (const b of modeButtons) {
@@ -435,6 +436,7 @@
     });
   }
   function computeFind() {
+    $('find-copy-status').textContent = '';
     state.findResult = Core.find(findInput.value, { digits: state.findDigits, mode: state.findMode });
     renderFind();
   }
@@ -464,6 +466,10 @@
     const countLine = joined ? t('foundCountJoined', { n: r.matches.length, m: r.unread.length })
       : t(r.matches.length === 1 ? 'foundCountOne' : 'foundCount', { n: r.matches.length, seq, single: r.singles.length });
     $('find-count').textContent = text ? (r.matches.length || r.unread.length ? countLine : t('noneFound')) : '';
+    // 単語ごとに読んで何も見つからなかったら、英字の並びとして区切る読み方を案内する
+    const hint = text && !joined && !r.matches.length && /[A-Za-z]/.test(text);
+    $('find-hint').hidden = !hint;
+    $('find-hint').replaceChildren(hint ? words(t('findHintJoined')) : '');
     const modeKey = joined ? (r.auto ? 'modeJoinedAuto' : 'modeJoined')
       : (r.auto ? 'modeWordsAuto' : 'modeWords') + (r.splitTokens ? 'Split' : '');
     $('find-mode-line').replaceChildren(text ? words(t(modeKey, { n: r.splitTokens })) : '');
@@ -533,9 +539,18 @@
     button.addEventListener('click', () => speakCard(button, word));
     return button;
   }
+  // 数字のカード：ICAO式の綴りがふつうの英語と違う数字には、ICAO式で読むボタンを添える（カードの中にボタンを入れないよう、外に並べる）
+  function digitCard(d) {
+    const main = card(d.ch, d.word, d.kana, d.icao === d.word ? d.icao : null, null);
+    if (d.icao === d.word) return E('div', { class: 'card-wrap' }, main);
+    const icao = E('button', { class: 'icao-speak', type: 'button', lang: 'en', 'aria-label': t('cardSpeakIcao', { word: d.icao }) },
+      E('span', { lang: I18n.lang, 'aria-hidden': 'true' }, t('icaoLabel')), E('br'), E('b', { 'aria-hidden': 'true' }, '▶ ' + d.icao));
+    icao.addEventListener('click', () => speakCard(icao, d.icao));
+    return E('div', { class: 'card-wrap' }, main, icao);
+  }
   function renderReference() {
     $('letter-grid').replaceChildren(...Core.LETTERS.map((l) => card(l.ch, l.word, l.kana, null, l.alt)));
-    $('digit-grid').replaceChildren(...Core.DIGITS.map((d) => card(d.ch, d.word, d.kana, d.icao, null)));
+    $('digit-grid').replaceChildren(...Core.DIGITS.map(digitCard));
     $('ref-status').textContent = '';
   }
   function speakCard(button, word) {
