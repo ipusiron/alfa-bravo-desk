@@ -333,15 +333,23 @@
     return result.sequences.flat().map((k) => ({ index: k, text: speechText(result.matches[k].icao || result.matches[k].canon) }));
   }
 
-  // ===== 読み上げの声：言語が en で始まる声から1つ（en-US、en-GB、そのほかの en の順。同じなら端末に入っている声を先に） =====
+  // ===== 読み上げの声：英語（en-US、en-GB、そのほかの en の順）→ 日本語（ja）→ そのほかの最初の声。
+  // 同じ順位なら端末に入っている声を先に。声がまったくなければ null =====
+  function voiceKind(voice) {
+    const lang = String((voice && voice.lang) || '').replace('_', '-').toLowerCase();
+    return /^en(?:-|$)/.test(lang) ? 'en' : /^ja(?:-|$)/.test(lang) ? 'ja' : 'other';
+  }
   function pickVoice(voices) {
-    const list = Array.from(voices || []).filter((v) => v && /^en(?:[-_]|$)/i.test(String(v.lang || '')));
+    const list = Array.from(voices || []).filter(Boolean);
     if (!list.length) return null;
     const rank = (v) => {
-      const lang = String(v.lang).replace('_', '-').toLowerCase();
-      return (lang === 'en-us' ? 0 : lang === 'en-gb' ? 1 : 2) * 2 + (v.localService === false ? 1 : 0);
+      const lang = String(v.lang || '').replace('_', '-').toLowerCase();
+      const kind = voiceKind(v);
+      const group = kind === 'en' ? (lang === 'en-us' ? 0 : lang === 'en-gb' ? 1 : 2) : kind === 'ja' ? 3 : 4;
+      return group * 2 + (v.localService === false ? 1 : 0);
     };
-    return list.slice().sort((a, b) => rank(a) - rank(b))[0];
+    // 同じ順位の中では、一覧に出た順を保つ
+    return list.map((v, i) => [rank(v), i, v]).sort((a, b) => a[0] - b[0] || a[1] - b[1])[0][2];
   }
 
   // ===== 日本語の文の折り返してよい位置 =====
@@ -415,6 +423,6 @@
     MAX_SPELL, MAX_FIND, RATES, GAP_MS, COMMON_SPELLINGS, LETTER_SPELLINGS, DIGIT_MODES, LETTERS, DIGITS, SYMBOLS, SPACE_WORD, CAPITAL, SMALL, SPEECH_REPLACE,
     speechText, clampText, spell, countTypes, copyLine, speechQueue,
     FIND_MODES, AUTO_JOINED_MIN, AUTO_JOINED_MARGIN, LONG_TOKEN, LONG_TOKEN_MIN, detectMode, readRatio, find, findQueue, removeSpaces, removeLineBreaks,
-    pickVoice, phrases, formatNumber,
+    pickVoice, voiceKind, phrases, formatNumber,
   });
 }));

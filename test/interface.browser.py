@@ -39,7 +39,7 @@ FAKE_SPEECH = """(() => {
   class FakeUtterance {
     constructor(text) { this.text = text; this.voice = null; this.lang = ''; this.rate = 1; this.onend = null; this.onerror = null; }
   }
-  const voices = window.__noVoice ? [{ name: 'Fake Japanese', lang: 'ja-JP', localService: true }]
+  const voices = window.__noVoices ? [] : window.__noVoice ? [{ name: 'Fake Japanese', lang: 'ja-JP', localService: true }]
     : [{ name: 'Fake Japanese', lang: 'ja-JP', localService: true }, { name: 'Fake English', lang: 'en-US', localService: true }];
   const synth = {
     current: null,
@@ -154,7 +154,7 @@ def serve():
         server.shutdown()
 
 
-def open_page(browser, url, width, height, language, theme, no_voice=False):
+def open_page(browser, url, width, height, language, theme, no_voice=False, no_voices=False):
     context = browser.new_context(viewport={"width": width, "height": height}, color_scheme=theme, reduced_motion="reduce",
                                   locale="ja-JP" if language == "ja" else "en-US")
     page = context.new_page()
@@ -163,6 +163,8 @@ def open_page(browser, url, width, height, language, theme, no_voice=False):
     page.on("pageerror", lambda e: errors.append(str(e)))
     if no_voice:
         page.add_init_script("window.__noVoice = true;")
+    if no_voices:
+        page.add_init_script("window.__noVoices = true;")
     page.add_init_script(FAKE_SPEECH)
     page.add_init_script(CSP_WATCH)
     page.goto(url + ("?lang=" + language if language else ""))
@@ -407,18 +409,70 @@ def test_spelling_and_find(browser, url, name, output=None):
     context.close()
 
 
-def test_no_voice(browser, url, name):
+NOTICE_JA = "この端末には英語の声がないため、日本語の声で読みます（発音は日本語の読み方になります）。"
+NOTICE_NONE = "この端末には読み上げの声がないため、読み上げられません。"
+
+
+def notice_state(page):
+    return page.evaluate("""() => ['spell-voice-note', 'find-voice-note', 'ref-voice-note'].map(id => {
+      const el = document.getElementById(id); return [el.hidden, el.textContent]; })""")
+
+
+def test_no_voice(browser, url, name, output=None):
+    # Only a Japanese voice: the buttons work, and the notice in the colored band is the same on the three tabs
     context, page, errors = open_page(browser, url, 390, 844, "ja", "light", no_voice=True)
+    page.wait_for_timeout(300)
+    states = notice_state(page)
+    check(all(not hidden and text.startswith("注意" + NOTICE_JA) and "English (United States)" in text for hidden, text in states),
+          (name, "Japanese voice notice", states))
+    check(page.is_enabled("#spell-speak"), (name, "speak works with a Japanese voice"))
+    top = page.evaluate("document.getElementById('spell-speak').getBoundingClientRect().top + window.scrollY")
+    page.click("#spell-speak")
+    check(page.evaluate("window.__speechLog")[-1]["lang"] == "ja-JP", (name, "read with the Japanese voice"))
+    page.click("#spell-stop")
     page.wait_for_timeout(1700)
-    check(page.is_disabled("#spell-speak"), (name, "speak disabled without an English voice"))
-    check(page.text_content("#spell-status") == "この端末には英語の声がないため、読み上げられません。", (name, "no voice message"))
+    check(abs(page.evaluate("document.getElementById('spell-speak').getBoundingClientRect().top + window.scrollY") - top) < 1, (name, "button moved"))
+    page.click("#tab-reference")
+    page.click("#letter-grid .letter-card >> nth=0")
+    check(page.evaluate("window.__speechLog")[-1]["text"] == "Alpha", (name, "card read with the Japanese voice"))
+    # The band stands out: its colors differ from the panel, with a thick line on the left
+    band = page.evaluate("""() => { const s = getComputedStyle(document.getElementById('ref-voice-note'));
+      const p = getComputedStyle(document.getElementById('panel-reference'));
+      return [s.backgroundColor !== p.backgroundColor, parseFloat(s.borderLeftWidth)]; }""")
+    check(band[0] and band[1] >= 4, (name, "band", band))
+    if output:
+        for width, height in ((1280, 800), (390, 844)):
+            page.set_viewport_size({"width": width, "height": height})
+            for tab in TABS:
+                page.click(f"#tab-{tab}")
+                if tab == "find":
+                    page.click("#find-example")
+                page.evaluate(f"document.getElementById('{ {'spell': 'spell-speak', 'find': 'find-speak', 'reference': 'ref-voice-note'}[tab] }')"
+                              ".scrollIntoView({ block: 'center' })")
+                page.wait_for_timeout(200)
+                page.screenshot(path=str(output / f"notice_{tab}_{width}.png"), caret="initial")
+    assert_clean(page, errors, name)
+    context.close()
+    # English page: the same notice in English
+    context, page, errors = open_page(browser, url, 390, 844, "en", "dark", no_voice=True)
+    page.wait_for_timeout(300)
+    text = page.text_content("#spell-voice-note")
+    check(text.startswith("NoteThis device has no English voice") and "English (United States)" in text, (name, "English notice", text))
+    assert_clean(page, errors, name)
+    context.close()
+    # No voice at all: the buttons are off, the cards stay, and pressing a card says why
+    context, page, errors = open_page(browser, url, 390, 844, "ja", "light", no_voices=True)
+    page.wait_for_timeout(1700)
+    check(page.is_disabled("#spell-speak"), (name, "speak disabled without any voice"))
+    states = notice_state(page)
+    check(all(not hidden and text.startswith("注意" + NOTICE_NONE) for hidden, text in states), (name, "no voice notice", states))
     page.click("#tab-find")
     page.click("#find-example")
     check(page.is_disabled("#find-speak"), (name, "find speak disabled"))
     page.click("#tab-reference")
     check(page.evaluate("document.querySelectorAll('.letter-card').length") == 36, (name, "cards still shown"))
     page.click("#letter-grid .letter-card >> nth=0")
-    check(page.text_content("#ref-status") == "この端末には英語の声がないため、読み上げられません。", (name, "card message"))
+    check(page.text_content("#ref-status") == NOTICE_NONE, (name, "card message"))
     check(not [x for x in page.evaluate("window.__speechLog") if "text" in x], (name, "nothing read"))
     assert_clean(page, errors, name)
     context.close()
@@ -472,7 +526,7 @@ def main():
                         cases += 1
             test_speech(browser, url, (browser_name, "speech"))
             test_spelling_and_find(browser, url, (browser_name, "spelling and find"), output if browser_name == "chromium" else None)
-            test_no_voice(browser, url, (browser_name, "no voice"))
+            test_no_voice(browser, url, (browser_name, "no voice"), output if browser_name == "chromium" else None)
             test_file_url(browser, (browser_name, "file"))
             cases += 4
             if browser_name == "chromium":

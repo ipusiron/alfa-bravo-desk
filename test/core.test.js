@@ -147,15 +147,24 @@ test('速さと語の間：ふつう1.0・ゆっくり0.7、間はゆっくり�
   assert.ok(Object.isFrozen(C.RATES) && Object.isFrozen(C.GAP_MS));
 });
 
-test('声：言語が en で始まる声から選ぶ（en-US を先に）。なければ null', () => {
-  assert.equal(C.pickVoice([]), null);
-  assert.equal(C.pickVoice([{ lang: 'ja-JP' }, { lang: 'de-DE' }]), null);
+test('声：英語（en-US を先に）→ 日本語 → そのほかの最初の声の順に選ぶ。声がなければ null', () => {
+  // 英語あり
   assert.equal(C.pickVoice([{ lang: 'ja-JP', name: 'j' }, { lang: 'en-GB', name: 'g' }]).name, 'g');
   assert.equal(C.pickVoice([{ lang: 'en-GB', name: 'g' }, { lang: 'en-US', name: 'u' }]).name, 'u');
   assert.equal(C.pickVoice([{ lang: 'en-US', name: 'net', localService: false }, { lang: 'en-US', name: 'local', localService: true }]).name, 'local');
-  assert.equal(C.pickVoice([{ lang: 'en_AU', name: 'a' }]).name, 'a');
-  assert.equal(C.pickVoice([{ lang: 'eng' }]), null);
+  assert.equal(C.pickVoice([{ lang: 'de-DE', name: 'd' }, { lang: 'en_AU', name: 'a' }]).name, 'a');
+  // 日本語だけ・日本語とほかの言語
+  assert.equal(C.pickVoice([{ lang: 'ja-JP', name: 'j' }]).name, 'j');
+  assert.equal(C.pickVoice([{ lang: 'de-DE', name: 'd' }, { lang: 'ja-JP', name: 'j' }]).name, 'j');
+  // ほかの言語だけ：一覧の最初の声（同じ順位なら一覧の順）
+  assert.equal(C.pickVoice([{ lang: 'de-DE', name: 'd' }, { lang: 'fr-FR', name: 'f' }]).name, 'd');
+  assert.equal(C.pickVoice([{ lang: 'eng', name: 'x' }]).name, 'x');
+  // 空
+  assert.equal(C.pickVoice([]), null);
   assert.equal(C.pickVoice(null), null);
+  // 声の言語の種類
+  assert.deepEqual([{ lang: 'en-US' }, { lang: 'EN_gb' }, { lang: 'ja-JP' }, { lang: 'ja' }, { lang: 'de-DE' }, { lang: 'eng' }, {}].map(C.voiceKind),
+    ['en', 'en', 'ja', 'ja', 'other', 'other', 'other']);
 });
 
 test('日本語の折り返し位置：語の切れ目で区切り、行頭に来てはいけない文字の前と短いかぎかっこの中では区切らない', () => {

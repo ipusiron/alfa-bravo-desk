@@ -14,6 +14,9 @@
   --shadow: #d8dcd4;
   --on-accent: #fffffb;
   --warn: #9b2c1f;
+  --notice-bg: #fff1dc;
+  --notice-ink: #4a2600;
+  --notice-line: #b85c00;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -30,6 +33,9 @@
   --shadow: #08121c;
   --on-accent: #10202e;
   --warn: #ffb4a8;
+  --notice-bg: #3d2a12;
+  --notice-ink: #ffe2bf;
+  --notice-line: #f0a24a;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -338,3 +344,16 @@ mark sup { font-size: .7rem; font-weight: 700; color: var(--accent); margin-left
 p, li, .seg-note.stack > span { text-wrap: pretty; }
 /* 日本語の短い句（js/i18n.js）は句の中で折り返さない */
 .ph { white-space: nowrap; }
+
+/* ===== 声についての知らせ：読み上げのボタンのすぐ下に、注意の色の帯で出す ===== */
+.voice-notice {
+  margin: .5rem 0 0;
+  padding: .5rem .7rem;
+  border-left: 6px solid var(--notice-line);
+  border-radius: 4px;
+  background: var(--notice-bg);
+  color: var(--notice-ink);
+  font-size: .875rem;
+}
+.notice-label { display: inline-block; margin-right: .5rem; font-weight: 700; }
+.notice-howto { display: block; margin-top: .2rem; }

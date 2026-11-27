@@ -47,6 +47,7 @@
     synth: ('speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function') ? window.speechSynthesis : null,
     voice: null,
     status: 'pending', // pending | ready | none | unsupported
+    kind: null, // 選んだ声の言語：en | ja | other
     session: 0,
     timer: null,
     owner: null,
@@ -56,7 +57,7 @@
   function updateVoice() {
     if (!speech.synth) { speech.status = 'unsupported'; return; }
     const voice = Core.pickVoice(speech.synth.getVoices());
-    if (voice) { speech.voice = voice; speech.status = 'ready'; }
+    if (voice) { speech.voice = voice; speech.kind = Core.voiceKind(voice); speech.status = 'ready'; }
     else if (speech.status !== 'pending') speech.status = 'none';
   }
   function initVoices() {
@@ -70,10 +71,24 @@
     if (speech.status === 'pending') window.setTimeout(settle, 1500);
     refreshSpeakButtons();
   }
-  function voiceProblem() {
-    if (speech.status === 'unsupported') return t('noSpeech');
-    if (speech.status === 'none') return t('noVoice');
-    return '';
+  // 声についての知らせ（なければ null）：英語以外の声で読むとき・声がないとき・読み上げに対応していないとき
+  function voiceNotice() {
+    if (speech.status === 'unsupported') return { key: 'noSpeech', howTo: false };
+    if (speech.status === 'none') return { key: 'noVoice', howTo: true };
+    if (speech.status === 'ready' && speech.kind === 'ja') return { key: 'voiceJa', howTo: true };
+    if (speech.status === 'ready' && speech.kind === 'other') return { key: 'voiceOther', howTo: true };
+    return null;
+  }
+  // 3つのタブの知らせの帯を同じ中身にする
+  function renderVoiceNotices() {
+    const notice = voiceNotice();
+    for (const id of ['spell-voice-note', 'find-voice-note', 'ref-voice-note']) {
+      const box = $(id);
+      box.hidden = !notice;
+      if (!notice) { box.replaceChildren(); continue; }
+      box.replaceChildren(E('span', { class: 'notice-label' }, t('noticeLabel')),
+        E('span', { class: 'notice-text' }, words(t(notice.key)), notice.howTo ? E('span', { class: 'notice-howto' }, words(t('voiceHowTo'))) : null));
+    }
   }
 
   // queue: [{ index, text }]。onWord(index, n) は読み始める語ごと、onEnd(reason) は 'finished' か 'stopped'
@@ -126,11 +141,7 @@
     $('find-speak').disabled = !ok || !(state.findResult && state.findResult.sequences.length);
     $('spell-stop').disabled = reading !== 'spell';
     $('find-stop').disabled = reading !== 'find';
-    const problem = voiceProblem();
-    if (problem) {
-      $('spell-status').textContent = problem;
-      $('find-status').textContent = problem;
-    }
+    renderVoiceNotices();
   }
 
   // ===== 見出し・明暗・言語 =====
@@ -488,8 +499,7 @@
     $('ref-status').textContent = '';
   }
   function speakCard(button, word) {
-    const problem = voiceProblem();
-    if (problem || speech.status !== 'ready') { $('ref-status').textContent = problem || t('noVoice'); return; }
+    if (speech.status !== 'ready') { $('ref-status').textContent = t(speech.status === 'unsupported' ? 'noSpeech' : 'noVoice'); return; }
     speakQueue('reference', [{ index: 0, text: Core.speechText(word) }], () => {
       button.classList.add('now');
       $('ref-status').textContent = t('refReading', { word });
