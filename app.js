@@ -160,11 +160,35 @@
     I18n.set(document, I18n.lang === 'ja' ? 'en' : 'ja');
   });
 
-  // 幅600px未満では「できること」を「くわしく」の中にたたむ（スマートフォンで開いた直後にタブが見えるように）
-  const wide = window.matchMedia('(min-width: 600px)');
-  const syncIntro = () => { $('intro-more').open = wide.matches; };
-  if (typeof wide.addEventListener === 'function') wide.addEventListener('change', syncIntro);
-  else if (typeof wide.addListener === 'function') wide.addListener(syncIntro);
+  // ===== ヘルプ（<dialog>）：開くと中へフォーカスが移り、Esc・「閉じる」・外側の暗い所で閉じる。閉じたらヘルプのボタンへ戻る =====
+  const helpDialog = $('help-dialog');
+  $('help').addEventListener('click', () => {
+    if (helpDialog.open) return;
+    document.documentElement.classList.add('dialog-open'); // 開いている間は後ろをスクロールさせない
+    helpDialog.showModal();
+    $('help-close').focus();
+  });
+  // 閉じる：後ろのスクロールを戻し、フォーカスをヘルプのボタンへ戻す（close の知らせを待たずにその場で行う。ブラウザーによって知らせが遅れるため）
+  function closeHelp(focusHelp = true) {
+    document.documentElement.classList.remove('dialog-open');
+    if (helpDialog.open) helpDialog.close();
+    if (focusHelp) $('help').focus();
+  }
+  $('help-close').addEventListener('click', () => closeHelp());
+  helpDialog.addEventListener('click', (event) => { if (event.target === helpDialog) closeHelp(); });
+  helpDialog.addEventListener('cancel', (event) => { event.preventDefault(); closeHelp(); }); // Esc
+  helpDialog.addEventListener('close', () => document.documentElement.classList.remove('dialog-open'));
+  for (const button of document.querySelectorAll('.help-go')) {
+    button.addEventListener('click', () => {
+      closeHelp(false);
+      selectTab(button.dataset.go, true);
+      $('tab-' + button.dataset.go).scrollIntoView({ block: 'nearest' });
+    });
+  }
+  function renderHelp() {
+    const names = { spell: 'tabSpell', find: 'tabFind', reference: 'tabReference' };
+    for (const button of document.querySelectorAll('.help-go')) I18n.setText(button, t('helpGo', { tab: t(names[button.dataset.go]) }));
+  }
 
   // ===== タブ =====
   function selectTab(name, focus) {
@@ -528,6 +552,7 @@
   // ===== 言語を替えたときは描き直すだけ（計算し直さない） =====
   function renderAll() {
     renderThemeButton();
+    renderHelp();
     renderSpell();
     renderFind();
     renderReference();
@@ -543,7 +568,6 @@
 
   // ===== 開始 =====
   I18n.init(document);
-  syncIntro();
   updateSpellInput(false);
   updateFindInput(false);
   renderAll();

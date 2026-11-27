@@ -32,13 +32,32 @@ test('タブ3つ（spell・find・reference）と、それぞれのパネル', (
   assert.deepEqual([...html.matchAll(/<button\s+id="tab-([a-z]+)" class="tab" type="button" role="tab"/g)].map((m) => m[1]), tabs);
   assert.deepEqual([...html.matchAll(/<section id="panel-([a-z]+)" class="panel" role="tabpanel" aria-labelledby="tab-\1"/g)].map((m) => m[1]), tabs);
   for (const id of ['spell-input', 'spell-body', 'spell-speak', 'spell-stop', 'spell-copy', 'find-input', 'find-text', 'decoded', 'decoded-line',
-    'find-speak', 'find-stop', 'find-copy', 'find-example', 'singles', 'variants-body', 'letter-grid', 'digit-grid', 'theme', 'language', 'intro-more']) {
+    'find-speak', 'find-stop', 'find-copy', 'find-example', 'singles', 'variants-body', 'letter-grid', 'digit-grid', 'theme', 'language',
+    'help', 'help-dialog', 'help-close']) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
   // 止めるボタンは、読んでいないときは押せない
   assert.match(html, /<button id="spell-stop" type="button" data-i18n="stop" disabled>/);
   assert.match(html, /<button id="find-stop" type="button" data-i18n="stop" disabled>/);
   assert.equal((html.match(/class="study-card"/g) || []).length, 6);
+});
+
+test('ヘルプ：ダイアログの中に、できること・読み上げについて・出典・関連ツールの順。フッターは注記と GitHub のリンクだけ', () => {
+  const dialog = html.slice(html.indexOf('<dialog id="help-dialog"'), html.indexOf('</dialog>'));
+  assert.match(html, /<dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title">/);
+  assert.match(html, /<button id="help" class="tool-button" type="button" aria-haspopup="dialog" aria-controls="help-dialog">/);
+  const order = ['introFeaturesHeading', 'helpSpeechHeading', 'sourcesHeading', 'relatedHeading'].map((k) => dialog.indexOf('data-i18n="' + k + '"'));
+  assert.ok(order.every((at) => at >= 0), String(order));
+  assert.deepEqual([...order].sort((a, b) => a - b), order);
+  assert.equal((dialog.match(/class="help-go"/g) || []).length, 3);
+  for (const href of ['laws.e-gov.go.jp', 'icao.int', 'unitingaviation.com', 'caa.co.uk', 'morse-tree-visualizer', 'polybius-cipherlab']) {
+    assert.ok(dialog.includes(href), href);
+  }
+  const footer = html.slice(html.indexOf('<footer'), html.indexOf('</footer>'));
+  assert.deepEqual([...footer.matchAll(/data-i18n="([a-zA-Z0-9]+)"/g)].map((m) => m[1]), ['introNote', 'githubLink']);
+  // 冒頭は目的の段落だけ（できることの一覧はヘルプへ）
+  const intro = html.slice(html.indexOf('<section class="intro"'), html.indexOf('</section>', html.indexOf('<section class="intro"')));
+  assert.deepEqual([...intro.matchAll(/data-i18n="([a-zA-Z0-9]+)"/g)].map((m) => m[1]), ['introLead']);
 });
 
 test('外部リンクはすべて別タブ・opener なし。フッターに GitHub のリンク', () => {

@@ -195,13 +195,17 @@ def test_layout(browser, url, width, height, language, theme, name):
     check(page.evaluate("document.documentElement.lang") == language, (name, "lang"))
     check(page.evaluate("document.documentElement.dataset.theme") == theme, (name, "theme"))
     check(page.evaluate("window.__speechLog.length") == 0, (name, "nothing is read when the page opens"))
-    # Under 600 px the list of what the tool does folds into "More"; from 600 px it is open and its summary hidden
-    opened = page.evaluate("document.getElementById('intro-more').open")
-    check(opened == (width >= 600), (name, "intro folded", opened))
-    # Right after opening on a phone (390x844), the whole tab bar is on the screen
+    # Right after opening on a phone (390x844), the tab bar and the input box are on the screen
     if (width, height) == (390, 844):
-        bottom = page.evaluate("document.querySelector('.tabs').getBoundingClientRect().bottom")
-        check(bottom <= height, (name, "tab bar below the first screen", bottom))
+        for selector in (".tabs", "#spell-input"):
+            bottom = page.evaluate(f"document.querySelector('{selector}').getBoundingClientRect().bottom")
+            check(bottom <= height, (name, selector, "below the first screen", bottom))
+    # The title, the subtitle and the note in the footer sit in the middle of the page
+    for selector in ("h1", ".subtitle", ".footer-note", ".github"):
+        off = page.evaluate(f"""() => {{ const el = document.querySelector('{selector}'); const r = document.createRange();
+          r.selectNodeContents(el); const box = r.getBoundingClientRect();
+          return (box.left + box.right) / 2 - document.documentElement.clientWidth / 2; }}""")
+        check(abs(off) < 2, (name, selector, "not centered", off))
     # The subtitle never breaks inside 通話表ツール
     if language == "ja":
         broken = page.evaluate(SUBTITLE_BREAK)
@@ -495,6 +499,52 @@ def test_no_voice(browser, url, name, output=None):
     context.close()
 
 
+def test_help(browser, url, name, output=None):
+    for width, height in ((320, 568), (390, 844), (1280, 800)):
+        for language in ("ja", "en"):
+            label = (name, width, language)
+            context, page, errors = open_page(browser, url, width, height, language, "dark" if width == 390 else "light")
+            dialog = "document.getElementById('help-dialog')"
+            check(not page.evaluate(dialog + ".open"), (label, "closed at first"))
+            page.click("#help")
+            check(page.evaluate(dialog + ".open"), (label, "opens"))
+            check(page.evaluate(dialog + ".contains(document.activeElement)"), (label, "focus inside"))
+            check(page.evaluate("getComputedStyle(document.documentElement).overflow") == "hidden", (label, "page behind does not scroll"))
+            rect = page.evaluate(dialog + ".getBoundingClientRect().toJSON()")
+            check(rect["left"] >= 0 and rect["right"] <= width and rect["bottom"] <= height, (label, "dialog fits", rect))
+            body = page.evaluate("[document.querySelector('.help-body').scrollHeight, document.querySelector('.help-body').clientHeight]")
+            if width == 320:
+                check(body[0] > body[1], (label, "the help scrolls inside", body))
+            check(page.evaluate("document.querySelector('.help-body').scrollWidth <= document.querySelector('.help-body').clientWidth"),
+                  (label, "no sideways scroll in the help"))
+            order = page.evaluate("[...document.querySelectorAll('.help-body h3')].map(h => h.dataset.i18n)")
+            check(order == ["introFeaturesHeading", "helpSpeechHeading", "sourcesHeading", "relatedHeading"], (label, "order", order))
+            links = page.evaluate("[...document.querySelectorAll('#help-dialog a')].map(a => [a.target, a.rel])")
+            check(len(links) == 6 and all(t == "_blank" and "noopener" in r for t, r in links), (label, "links open in a new tab", links))
+            if language == "en":
+                check(not JAPANESE.search(page.evaluate(dialog + ".textContent")), (label, "Japanese in the English help"))
+            if output and language == "ja" and width in (390, 1280):
+                page.screenshot(path=str(output / f"help_{width}.png"), caret="initial")
+            page.keyboard.press("Escape")
+            check(not page.evaluate(dialog + ".open"), (label, "Escape closes"))
+            check(page.evaluate("document.activeElement.id") == "help", (label, "focus back to the help button"))
+            check(page.evaluate("getComputedStyle(document.documentElement).overflow") != "hidden", (label, "scroll back"))
+            page.click("#help")
+            page.click("#help-close")
+            check(not page.evaluate(dialog + ".open"), (label, "Close closes"))
+            check(page.evaluate("document.activeElement.id") == "help", (label, "focus back after Close"))
+            page.click("#help")
+            page.mouse.click(3, height - 3)
+            check(not page.evaluate(dialog + ".open"), (label, "the dark area outside closes"))
+            # A tab name in the help closes it and moves to the tab
+            page.click("#help")
+            page.click(".help-go[data-go=find]")
+            check(not page.evaluate(dialog + ".open"), (label, "tab link closes"))
+            check(page.evaluate("location.hash") == "#find" and page.evaluate("document.activeElement.id") == "tab-find", (label, "moved to the tab"))
+            assert_clean(page, errors, label)
+            context.close()
+
+
 def test_file_url(browser, name):
     context = browser.new_context(viewport={"width": 390, "height": 844})
     page = context.new_page()
@@ -518,6 +568,12 @@ def shots(browser, url, output):
             page.wait_for_timeout(300)
             page.screenshot(path=str(output / f"{tab}_{width}.png"), caret="initial")
             page.screenshot(path=str(output / f"{tab}_{width}_full.png"), full_page=True, caret="initial")
+            if tab == "spell":
+                page.screenshot(path=str(output / f"top_{width}.png"), caret="initial")
+                page.evaluate("window.scrollTo(0, document.documentElement.scrollHeight)")
+                page.wait_for_timeout(200)
+                page.screenshot(path=str(output / f"bottom_{width}.png"), caret="initial")
+                page.evaluate("window.scrollTo(0, 0)")
             if tab == "reference":
                 page.evaluate("document.getElementById('letter-grid').scrollIntoView()")
                 page.wait_for_timeout(200)
@@ -545,7 +601,8 @@ def main():
             test_spelling_and_find(browser, url, (browser_name, "spelling and find"), output if browser_name == "chromium" else None)
             test_no_voice(browser, url, (browser_name, "no voice"), output if browser_name == "chromium" else None)
             test_file_url(browser, (browser_name, "file"))
-            cases += 4
+            test_help(browser, url, (browser_name, "help"), output if browser_name == "chromium" else None)
+            cases += 10
             if browser_name == "chromium":
                 shots(browser, url, output)
             browser.close()

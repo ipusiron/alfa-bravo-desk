@@ -16,14 +16,21 @@
     languageButton: 'EN',
     languageToggle: 'EN：英語の表示にする',
     introLead: '英字や数字を電話や無線で伝えると、MとN、GとJのように聞き違えやすい文字があります。'
-      + '通話表（NATOフォネティックコード）は、1文字ずつ決まった単語に置き換えて伝えるための表です。'
-      + 'このツールでは、同じ通話表を、伝える側と聞き取る側の両方から使えます。',
+      + 'このツールでは、通話表（NATOフォネティックコード）を使って、文字列を1文字ずつ通話表の単語に置き換えて読み上げたり、'
+      + '文章に紛れた通話表の単語を英字に戻したり、26文字と10の数字の読み方をカードで覚えたりできます。',
     introFeaturesHeading: 'このツールでできること',
-    introMore: 'くわしく（このツールでできること）',
-    introFeature1: 'パスワードや予約番号を1文字ずつ通話表の単語に置き換え、ブラウザーの声で読み上げる（「綴りを伝える」タブ）',
-    introFeature2: '文章に紛れたAlfa・Bravoなどの単語を見つけ、英字の列に戻す（「文章から見つける」タブ）',
-    introFeature3: '26文字と10の数字の読み方と、表の由来や決まりをカードで覚える（「一覧と座学」タブ）',
+    introFeature1: 'パスワードや予約番号を1文字ずつ通話表の単語に置き換え、ブラウザーの声で読み上げる',
+    introFeature2: '文章に紛れたAlfa・Bravoなどの単語を見つけ、英字の列に戻す',
+    introFeature3: '26文字と10の数字の読み方と、表の由来や決まりをカードで覚える',
     introNote: '読み上げには端末に入っている声を使います。入力した文字は外部へ送りません。',
+    helpButton: 'ヘルプ',
+    helpTitle: 'ヘルプ',
+    helpClose: '閉じる',
+    helpGo: '「{tab}」タブを開く',
+    helpSpeechHeading: '読み上げについて',
+    helpSpeech1: '読み上げには、ブラウザーの読み上げの仕組みと、端末に入っている声を使います。入力した文字は外部へ送りません。',
+    helpSpeech2: '英語の声がない端末では、日本語の声で読みます（日本語の声もなければ、端末にあるほかの声で読みます）。'
+      + 'このとき、発音はその言語の読み方になります。',
     noscript: 'このツールを使うには、JavaScriptを有効にしてください。',
     tabsLabel: 'ツールのタブ',
     tabSpell: '綴りを伝える',
@@ -248,7 +255,7 @@
     study6Row4b: '小文字のLima',
 
     // ===== 出典と関連ツール =====
-    sourcesHeading: '出典と関連ツール',
+    sourcesHeading: '出典',
     source1: '無線局運用規則 第14条第3項・別表第五号「通話表」（e-Gov法令検索）',
     source2: 'ICAO「Annex 10 - Aeronautical Telecommunications」の沿革（通話表の採用と1956年の最終版）',
     source3: 'ICAO Uniting Aviation「You’ve heard alfa, bravo, Charlie…but do you know where it came from?」',
@@ -287,15 +294,21 @@
     languageButton: 'JA',
     languageToggle: 'JA: Show in Japanese',
     introLead: 'When you read letters and digits over the phone or the radio, some are easy to mishear, such as M and N, or G and J. '
-      + 'The spelling alphabet (the NATO phonetic alphabet) replaces each character with a fixed word. '
-      + 'This tool uses the same alphabet from both ends: the one who reads it out and the one who writes it down.',
+      + 'With the spelling alphabet (the NATO phonetic alphabet), this tool turns text into code words and reads them aloud, '
+      + 'turns code words hidden in a text back into letters, and shows the words for the 26 letters and 10 digits on cards.',
     introFeaturesHeading: 'What you can do here',
-    introMore: 'More (what you can do here)',
-    introFeature1: 'Turn a password or a booking number into code words, one character at a time, and hear them in the browser\'s voice '
-      + '(the Spell out tab)',
-    introFeature2: 'Find words such as Alfa and Bravo hidden in a text and turn them back into letters (the Find in text tab)',
-    introFeature3: 'Learn the words for the 26 letters and 10 digits, and where the alphabet comes from, on cards (the Reference tab)',
+    introFeature1: 'Turn a password or a booking number into code words, one character at a time, and hear them in the browser\'s voice',
+    introFeature2: 'Find words such as Alfa and Bravo hidden in a text and turn them back into letters',
+    introFeature3: 'Learn the words for the 26 letters and 10 digits, and where the alphabet comes from, on cards',
     introNote: 'Reading aloud uses the voices installed on your device. Nothing you type is sent anywhere.',
+    helpButton: 'Help',
+    helpTitle: 'Help',
+    helpClose: 'Close',
+    helpGo: 'Open the {tab} tab',
+    helpSpeechHeading: 'Reading aloud',
+    helpSpeech1: 'Reading aloud uses the speech feature of the browser and the voices installed on your device. Nothing you type is sent anywhere.',
+    helpSpeech2: 'On a device without an English voice, a Japanese voice reads the words (or, without a Japanese voice either, another voice '
+      + 'on the device). The pronunciation then follows that language.',
     noscript: 'Enable JavaScript to use this tool.',
     tabsLabel: 'Tool tabs',
     tabSpell: 'Spell out',
@@ -524,7 +537,7 @@
     study6Row4a: 'l (small letter)',
     study6Row4b: 'Small Lima',
 
-    sourcesHeading: 'Sources and related tools',
+    sourcesHeading: 'Sources',
     source1: 'Radio Station Operation Rules (Japan), Article 14 (3) and Appended Table 5 (e-Gov, in Japanese)',
     source2: 'ICAO, history of Annex 10 - Aeronautical Telecommunications (adoption of the alphabet and the 1956 final version)',
     source3: 'ICAO Uniting Aviation, "You\'ve heard alfa, bravo, Charlie...but do you know where it came from?"',
