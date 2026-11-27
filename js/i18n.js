@@ -8,6 +8,8 @@
 }(typeof globalThis !== 'undefined' ? globalThis : this, function (Messages, Core) {
   'use strict';
   const STORAGE_KEY = 'alfa-bravo-desk.lang';
+  const JAPANESE = /[぀-ヿ㐀-鿿]/;
+  const PHRASE_MAX = 16; // これより長い句は、狭い画面ではみ出さないよう、句の中でも折り返せるままにする
 
   // ?lang= → 保存した選択 → ブラウザーの言語（ja で始まれば日本語、ほかは英語）
   function detectLanguage(search, stored, navigatorLanguage) {
@@ -30,7 +32,13 @@
     const parts = [];
     Core.phrases(text).forEach((piece, i) => {
       if (i) parts.push(doc.createElement('wbr'));
-      parts.push(doc.createTextNode(piece));
+      // 日本語を含む短い句は、句の中で折り返さない（閉じかっこのあとの助詞などが行頭に来ないように）
+      if (JAPANESE.test(piece) && Array.from(piece).length <= PHRASE_MAX) {
+        const span = doc.createElement('span');
+        span.className = 'ph';
+        span.textContent = piece;
+        parts.push(span);
+      } else parts.push(doc.createTextNode(piece));
     });
     el.replaceChildren(...parts);
   }
