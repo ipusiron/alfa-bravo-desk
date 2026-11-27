@@ -175,7 +175,7 @@
     digitsHeading: '数字（0〜9）',
     icaoLabel: 'ICAO式',
     altLabel: '別の綴り',
-    digitsNote: 'ICAO式の綴りは、ICAOの表や無線局運用規則にある数字の発音の表記（3はTREE、9はNIN-erなど）をもとにしたものです。',
+    digitsNote: 'ICAO式の綴りは、ICAOの表や無線局運用規則にある数字の発音の表記をもとにしています（3はTREE、9はNIN-erなど）。',
     cardSpeak: '{ch}：{word}を読み上げる',
     refReading: '{word}を読んでいます',
     studyHeading: '座学',

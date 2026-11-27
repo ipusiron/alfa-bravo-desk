@@ -64,7 +64,8 @@ CSP_WATCH = """document.addEventListener('securitypolicyviolation', (e) => {
 
 # '' when 通話表ツール in the subtitle sits on one line
 SUBTITLE_BREAK = """() => { const p = document.querySelector('.subtitle');
-  const node = [...p.childNodes].find(n => n.nodeType === 3 && n.textContent.includes('通話表ツール'));
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); let node = null, n;
+  while ((n = walker.nextNode())) if (n.textContent.includes('通話表ツール')) node = n;
   if (!node) return 'not in one text node'; const i = node.textContent.indexOf('通話表ツール');
   const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 6);
   const tops = new Set([...r.getClientRects()].map(x => Math.round(x.top))); return tops.size > 1 ? 'broken' : ''; }"""
@@ -75,6 +76,58 @@ SPACED = "\n".join([
     "A L P H A M I K E E C H O T A N", "G O H O T E L Y A N K E E S I E", "R R A T A N G O D E L T A I N D",
     "I G O A L P H A M I K E O S C A", "R N O V E M B E R D E L T A E C", "H O M I K E E C H O R O M E O A",
     "L P H A L I M A D E L T A Q U E", "B E C U N I F O R M A L P H A R", "O M E O T A N G O Z U L U Q Q Q"])
+
+# The explanations on the screen: no line breaks inside a word, and the last line is not a lone short phrase (Japanese: one phrase
+# narrower than a quarter of the paragraph; English: one word). A phrase is a text node: the scripts put a <wbr> between phrases.
+WRAP_CHECK = """(lang) => {
+  const sel = ['.intro-lead', '.intro-list li', '.intro .note'].concat(['.lead', '.seg-note:not(.stack)', '.seg-note.stack > .on',
+    '.english-note', '.mode-line', '.study-card p'].map((x) => '.panel:not([hidden]) ' + x)).join(', ');
+  const out = [];
+  for (const el of document.querySelectorAll(sel)) {
+    if (!el.getClientRects().length) continue;
+    const chars = [];
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    let node, ni = 0;
+    while ((node = walker.nextNode())) {
+      const t = node.textContent;
+      for (let i = 0; i < t.length; i++) {
+        if (/\\s/.test(t[i])) { chars.push({ node: ni, space: true }); continue; }
+        const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 1);
+        const rect = [...r.getClientRects()].find((x) => x.width > 0);
+        if (rect) chars.push({ ch: t[i], node: ni, top: rect.top, left: rect.left, right: rect.right, space: false });
+      }
+      ni += 1;
+    }
+    const lines = [];
+    for (const c of chars) {
+      if (c.space) { if (lines.length) lines[lines.length - 1].push(c); continue; }
+      const line = lines[lines.length - 1];
+      const first = line && line.find((x) => !x.space);
+      if (!line || Math.abs(c.top - first.top) > 4) lines.push([c]); else line.push(c);
+    }
+    const name = (el.className || el.tagName) + ': ' + el.textContent.slice(0, 24);
+    for (let L = 0; L < lines.length - 1; L++) {
+      const vis = lines[L].filter((c) => !c.space);
+      const a = vis[vis.length - 1];
+      const b = lines[L + 1].find((c) => !c.space);
+      if (a && b && a.node === b.node && !lines[L][lines[L].length - 1].space && !/[-/]/.test(a.ch)) out.push(['mid-word', name, a.ch + '|' + b.ch]);
+    }
+    if (lines.length >= 2) {
+      const last = lines[lines.length - 1];
+      const vis = last.filter((c) => !c.space);
+      const inner = last.slice(last.indexOf(vis[0]), last.lastIndexOf(vis[vis.length - 1]) + 1);
+      const onePhrase = new Set(vis.map((c) => c.node)).size === 1 && !inner.some((c) => c.space);
+      const cs = getComputedStyle(el);
+      const content = el.getBoundingClientRect().width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+      const width = vis[vis.length - 1].right - vis[0].left;
+      const text = vis.map((c) => c.ch).join('');
+      if (lang === 'ja' && onePhrase && width < content / 4) out.push(['short last line', name, text]);
+      if (lang === 'en' && !inner.some((c) => c.space)) out.push(['one word on the last line', name, text]);
+    }
+  }
+  return out;
+}"""
+WRAP_ISSUES = []
 
 FAILURES = []
 
@@ -169,6 +222,11 @@ def test_layout(browser, url, width, height, language, theme, name):
         if tab == "find":
             page.click("#find-example")
         check(overflow(page) <= 0, (name, tab, "sideways scroll", overflow(page)))
+        for issue in page.evaluate(WRAP_CHECK, language):
+            WRAP_ISSUES.append((name, tab, *issue))
+            # Lines breaking inside a word are always an error; a short last line is listed (only Chromium has text-wrap: pretty)
+            if issue[0] == "mid-word" or name[0] == "chromium":
+                check(False, (name, tab, *issue))
         if tab == "spell":
             # Every choice of the switches: the result below does not move, and nothing sticks out sideways
             head = "document.querySelector('#panel-spell .result-head').getBoundingClientRect().top"
@@ -420,6 +478,9 @@ def main():
             if browser_name == "chromium":
                 shots(browser, url, output)
             browser.close()
+    print(f"wrap issues (all browsers): {len(WRAP_ISSUES)}")
+    for issue in WRAP_ISSUES:
+        print("  ", issue)
     print(f"cases: {cases}, failures: {len(FAILURES)}, output: {output}")
     sys.exit(1 if FAILURES else 0)
 

@@ -352,7 +352,7 @@
   // 2文字以上の助詞など（次がひらがなでないときは、そのあとで区切る）
   const TAIL_WORDS = ['から', 'まで', 'より', 'ずつ', 'ように', 'ため', 'とき', 'ごと'];
   const WHOLE_WORDS = ['ドイツ語', '通話表ツール'];
-  const NO_LINE_START = '、。，．・：；？！ー）」』】〕ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ〜';
+  const NO_LINE_START = '、。，．・：；？！＝ー）」』】〕ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ〜';
   const scriptOf = (ch) => (/[゠-ヿ]/.test(ch) ? 'katakana' : /[㐀-䶿一-鿿]/.test(ch) ? 'kanji'
     : /[぀-ゟ]/.test(ch) ? 'hiragana' : /[A-Za-z0-9]/.test(ch) ? 'latin' : 'other');
   function phrases(text) {
