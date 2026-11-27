@@ -1,0 +1,307 @@
+"""Browser checks for Alfa Bravo Desk (Playwright for Python; not part of CI).
+
+Run with a Python that already has Playwright and its Chromium, Firefox and WebKit:
+    python -X utf8 -B test/interface.browser.py
+    python -X utf8 -B test/interface.browser.py --output <folder> --browser chromium
+
+Every case runs at 320x568, 390x844 and 1280x800, in Japanese and English, light and dark, in the three browsers, with the page
+served over HTTP: the three tabs are opened one by one, and there must be no console error, no CSP violation and no sideways
+scroll of the page; the tab bar stays where it was when the tab changes; on the English page no Japanese is left (except the
+katakana guide on the cards). The voice is a stand-in for speechSynthesis put in before the page loads, so that the checks can
+see what would be read: nothing is read when the page opens, Read aloud reads the words in order with the marks on the row,
+the word in the text and the letter in the line, Stop stops and can be pressed only while reading, Slow uses the slower rate,
+and a device without an English voice gets the buttons turned off and the message. The page also opens from file://.
+Viewport and full-page screenshots of each tab (Japanese, light, 1280 and 390 wide) are written to --output (default: a new
+folder in the system temporary directory). Nothing is written inside the repository.
+"""
+import argparse
+import re
+import sys
+import tempfile
+from contextlib import contextmanager
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from threading import Thread
+
+from playwright.sync_api import sync_playwright
+
+ROOT = Path(__file__).resolve().parents[1]
+SIZES = ((320, 568), (390, 844), (1280, 800))
+BROWSERS = ("chromium", "firefox", "webkit")
+TABS = ("spell", "find", "reference")
+JAPANESE = re.compile("[　-〿぀-ヿ㐀-䶿一-鿿豈-﫿！-｠]")
+GAP_WAIT_MS = 900  # longer than the slow gap between words (700 ms)
+
+FAKE_SPEECH = """(() => {
+  const log = [];
+  window.__speechLog = log;
+  class FakeUtterance {
+    constructor(text) { this.text = text; this.voice = null; this.lang = ''; this.rate = 1; this.onend = null; this.onerror = null; }
+  }
+  const voices = window.__noVoice ? [{ name: 'Fake Japanese', lang: 'ja-JP', localService: true }]
+    : [{ name: 'Fake Japanese', lang: 'ja-JP', localService: true }, { name: 'Fake English', lang: 'en-US', localService: true }];
+  const synth = {
+    current: null,
+    getVoices() { return voices; },
+    speak(u) { log.push({ text: u.text, rate: u.rate, lang: u.lang }); this.current = u; },
+    cancel() { this.current = null; log.push({ cancel: true }); },
+    addEventListener() {},
+    removeEventListener() {},
+  };
+  window.__finishUtterance = () => {
+    const u = synth.current;
+    if (!u) return false;
+    synth.current = null;
+    if (u.onend) u.onend({});
+    return true;
+  };
+  Object.defineProperty(window, 'speechSynthesis', { value: synth, configurable: true });
+  window.SpeechSynthesisUtterance = FakeUtterance;
+})();"""
+CSP_WATCH = """document.addEventListener('securitypolicyviolation', (e) => {
+  (window.__csp = window.__csp || []).push(e.violatedDirective + ' ' + e.blockedURI); });"""
+
+FAILURES = []
+
+
+def check(condition, message):
+    if not condition:
+        FAILURES.append(message)
+        print("FAIL", message)
+
+
+class QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+
+@contextmanager
+def serve():
+    handler = partial(QuietHandler, directory=str(ROOT))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/index.html"
+    finally:
+        server.shutdown()
+
+
+def open_page(browser, url, width, height, language, theme, no_voice=False):
+    context = browser.new_context(viewport={"width": width, "height": height}, color_scheme=theme, reduced_motion="reduce",
+                                  locale="ja-JP" if language == "ja" else "en-US")
+    page = context.new_page()
+    errors = []
+    page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    if no_voice:
+        page.add_init_script("window.__noVoice = true;")
+    page.add_init_script(FAKE_SPEECH)
+    page.add_init_script(CSP_WATCH)
+    page.goto(url + ("?lang=" + language if language else ""))
+    page.wait_for_function("document.getElementById('spell-body').children.length > 0")
+    page.wait_for_timeout(100)
+    return context, page, errors
+
+
+def assert_clean(page, errors, name):
+    check(not errors, (name, "console errors", errors))
+    check(page.evaluate("window.__csp || []") == [], (name, "CSP violations", page.evaluate("window.__csp || []")))
+
+
+def overflow(page):
+    return page.evaluate("document.documentElement.scrollWidth - document.documentElement.clientWidth")
+
+
+def visible_text(page):
+    return page.evaluate("""() => {
+      const clone = document.body.cloneNode(true);
+      for (const el of clone.querySelectorAll('.kn, [hidden], noscript')) el.remove();
+      return clone.textContent; }""")
+
+
+def test_layout(browser, url, width, height, language, theme, name):
+    context, page, errors = open_page(browser, url, width, height, language, theme)
+    check(page.evaluate("document.documentElement.lang") == language, (name, "lang"))
+    check(page.evaluate("document.documentElement.dataset.theme") == theme, (name, "theme"))
+    check(page.evaluate("window.__speechLog.length") == 0, (name, "nothing is read when the page opens"))
+    # Under 390 px the list of what the tool does folds into "More"; from 390 px it is open and its summary hidden
+    opened = page.evaluate("document.getElementById('intro-more').open")
+    check(opened == (width >= 390), (name, "intro folded", opened))
+    bar_top = "document.querySelector('.tabs').getBoundingClientRect().top"
+    for tab in TABS:
+        # The tab is pressed in place (a script click, so that the test does not scroll): the tab bar must not move
+        before = page.evaluate(bar_top)
+        page.evaluate(f"document.getElementById('tab-{tab}').click()")
+        page.wait_for_timeout(50)
+        after = page.evaluate(bar_top)
+        check(abs(after - before) < 1, (name, tab, "tab bar moved", before, after))
+        check(page.evaluate(f"!document.getElementById('panel-{tab}').hidden"), (name, tab, "panel shown"))
+        check(page.evaluate("location.hash") == "#" + tab, (name, tab, "hash"))
+        if tab == "find":
+            page.click("#find-example")
+        check(overflow(page) <= 0, (name, tab, "sideways scroll", overflow(page)))
+        # Nothing sticks out of the panel (a wide table or a long word)
+        wide = page.evaluate(f"""() => {{ const p = document.getElementById('panel-{tab}').getBoundingClientRect();
+          return [...document.querySelectorAll('#panel-{tab} *')].filter(e => {{ const r = e.getBoundingClientRect();
+            return r.width && (r.right > p.right + 1 || r.left < p.left - 1); }}).map(e => e.tagName + '.' + e.className).slice(0, 5); }}""")
+        check(not wide, (name, tab, "sticks out of the panel", wide))
+    if language == "en":
+        left = [s for s in JAPANESE.findall(visible_text(page))]
+        check(not left, (name, "Japanese on the English page", "".join(left)[:40]))
+        attrs = page.evaluate("""() => [...document.querySelectorAll('[aria-label]')].map(e => e.getAttribute('aria-label'))""")
+        check(not [a for a in attrs if JAPANESE.search(a)], (name, "Japanese in aria-label"))
+    # Scroll down, change the tab: the place on the page does not jump
+    page.click("#tab-reference")
+    page.evaluate("window.scrollTo(0, document.querySelector('.tabs').getBoundingClientRect().top + window.scrollY - 10)")
+    before = page.evaluate("window.scrollY")
+    page.click("#tab-spell")
+    page.wait_for_timeout(50)
+    check(abs(page.evaluate("window.scrollY") - before) < 2, (name, "scroll jumped when the tab changed"))
+    assert_clean(page, errors, name)
+    context.close()
+
+
+def test_speech(browser, url, name):
+    context, page, errors = open_page(browser, url, 390, 844, "ja", "light")
+    log = lambda: page.evaluate("window.__speechLog")
+    check(page.is_disabled("#spell-stop"), (name, "stop disabled before reading"))
+    page.click("#spell-speak")
+    check(log()[-1]["text"] == "Capital Papa", (name, "first word", log()))
+    check(log()[-1]["rate"] == 1, (name, "normal rate"))
+    check(log()[-1]["lang"] == "en-US", (name, "English voice"))
+    check(page.is_enabled("#spell-stop"), (name, "stop enabled while reading"))
+    check(page.evaluate("document.querySelector('#spell-body tr.now').dataset.index") == "0", (name, "mark on row 1"))
+    check(page.text_content("#spell-status") == "1文字目を読んでいます", (name, "status 1"))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(log()[-1]["text"] == "Small Alpha", (name, "second word (Alfa read as Alpha)", log()[-1]))
+    check(page.evaluate("document.querySelector('#spell-body tr.now').dataset.index") == "1", (name, "mark on row 2"))
+    page.click("#spell-stop")
+    check(page.is_disabled("#spell-stop"), (name, "stop disabled after stop"))
+    check(page.evaluate("document.querySelectorAll('#spell-body tr.now').length") == 0, (name, "mark removed"))
+    check(page.text_content("#spell-status").startswith("止めました。"), (name, "stopped status", page.text_content("#spell-status")))
+    count = len(log())
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(len(log()) == count, (name, "nothing more after stop"))
+    # Slow, and to the end
+    page.click("#panel-spell [data-speed=slow]")
+    page.fill("#spell-input", "a1")
+    page.click("#spell-speak")
+    check(log()[-1]["rate"] == 0.7, (name, "slow rate", log()[-1]))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(log()[-1]["text"] == "One", (name, "digit", log()[-1]))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(page.text_content("#spell-status").startswith("読み終わりました。"), (name, "finished"))
+    check(page.is_disabled("#spell-stop"), (name, "stop disabled at the end"))
+    # Over the limit
+    page.fill("#spell-input", "x" * 205)
+    check(len(page.input_value("#spell-input")) == 200, (name, "200 characters kept"))
+    check(page.is_visible("#spell-over") and page.text_content("#spell-over") == "200文字までです。超えた分は入りません。", (name, "over"))
+    # Find in text
+    page.click("#tab-find")
+    page.click("#find-example")
+    check(page.text_content("#decoded-line") == "AB79 XE", (name, "decoded line"))
+    check(page.evaluate("document.querySelectorAll('#find-text mark.single').length") == 1, (name, "one single word"))
+    page.click("#find-speak")
+    check(log()[-1]["text"] == "Alpha", (name, "find first word", log()[-1]))
+    check(page.evaluate("document.querySelector('#find-text mark.now').dataset.k") == "0", (name, "mark in the text"))
+    check(page.evaluate("document.querySelector('#decoded .now').dataset.k") == "0", (name, "mark in the line"))
+    check(page.text_content("#find-status") == "1語目を読んでいます", (name, "find status"))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(page.evaluate("document.querySelector('#find-text mark.now').dataset.k") == "1", (name, "mark moved"))
+    page.click("#find-stop")
+    check(page.evaluate("document.querySelectorAll('#find-text mark.now, #decoded .now').length") == 0, (name, "find marks removed"))
+    # Changing the tab stops the reading
+    page.click("#find-speak")
+    page.click("#tab-reference")
+    check(log()[-1].get("cancel") is True, (name, "tab change cancels"))
+    page.click("#letter-grid .letter-card >> nth=9")
+    check(log()[-1]["text"] == "Juliet", (name, "card J read as Juliet", log()[-1]))
+    check(page.evaluate("document.querySelectorAll('.letter-card.now').length") == 1, (name, "card marked"))
+    page.evaluate("window.__finishUtterance()")
+    page.wait_for_timeout(GAP_WAIT_MS)
+    check(page.evaluate("document.querySelectorAll('.letter-card.now').length") == 0, (name, "card mark removed"))
+    # Copy (the button gives a message either way)
+    page.click("#tab-spell")
+    page.fill("#spell-input", "Ab")
+    check(page.text_content("#spell-copy-text") == "Capital Alfa, Small Bravo", (name, "copy text"))
+    assert_clean(page, errors, name)
+    context.close()
+
+
+def test_no_voice(browser, url, name):
+    context, page, errors = open_page(browser, url, 390, 844, "ja", "light", no_voice=True)
+    page.wait_for_timeout(1700)
+    check(page.is_disabled("#spell-speak"), (name, "speak disabled without an English voice"))
+    check(page.text_content("#spell-status") == "この端末には英語の声がないため、読み上げられません。", (name, "no voice message"))
+    page.click("#tab-find")
+    page.click("#find-example")
+    check(page.is_disabled("#find-speak"), (name, "find speak disabled"))
+    page.click("#tab-reference")
+    check(page.evaluate("document.querySelectorAll('.letter-card').length") == 36, (name, "cards still shown"))
+    page.click("#letter-grid .letter-card >> nth=0")
+    check(page.text_content("#ref-status") == "この端末には英語の声がないため、読み上げられません。", (name, "card message"))
+    check(not [x for x in page.evaluate("window.__speechLog") if "text" in x], (name, "nothing read"))
+    assert_clean(page, errors, name)
+    context.close()
+
+
+def test_file_url(browser, name):
+    context = browser.new_context(viewport={"width": 390, "height": 844})
+    page = context.new_page()
+    errors = []
+    page.on("pageerror", lambda e: errors.append(str(e)))
+    page.goto((ROOT / "index.html").as_uri() + "#find")
+    page.wait_for_function("document.getElementById('spell-body').children.length > 0")
+    check(not page.evaluate("document.getElementById('panel-find').hidden"), (name, "file:// opens #find"))
+    check(not errors, (name, "file:// errors", errors))
+    context.close()
+
+
+def shots(browser, url, output):
+    for width, height in ((1280, 800), (390, 844)):
+        context, page, errors = open_page(browser, url, width, height, "ja", "light")
+        for tab in TABS:
+            page.click(f"#tab-{tab}")
+            if tab == "find":
+                page.click("#find-example")
+            page.evaluate("window.scrollTo(0, 0)")
+            page.wait_for_timeout(300)
+            page.screenshot(path=str(output / f"{tab}_{width}.png"), caret="initial")
+            page.screenshot(path=str(output / f"{tab}_{width}_full.png"), full_page=True, caret="initial")
+        context.close()
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output")
+    parser.add_argument("--browser", choices=BROWSERS)
+    args = parser.parse_args()
+    output = Path(args.output) if args.output else Path(tempfile.mkdtemp(prefix="alfa-bravo-desk-"))
+    output.mkdir(parents=True, exist_ok=True)
+    cases = 0
+    with serve() as url, sync_playwright() as p:
+        for browser_name in ([args.browser] if args.browser else BROWSERS):
+            browser = getattr(p, browser_name).launch()
+            for width, height in SIZES:
+                for language in ("ja", "en"):
+                    for theme in ("light", "dark"):
+                        test_layout(browser, url, width, height, language, theme, (browser_name, width, language, theme))
+                        cases += 1
+            test_speech(browser, url, (browser_name, "speech"))
+            test_no_voice(browser, url, (browser_name, "no voice"))
+            test_file_url(browser, (browser_name, "file"))
+            cases += 3
+            if browser_name == "chromium":
+                shots(browser, url, output)
+            browser.close()
+    print(f"cases: {cases}, failures: {len(FAILURES)}, output: {output}")
+    sys.exit(1 if FAILURES else 0)
+
+
+if __name__ == "__main__":
+    main()

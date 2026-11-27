@@ -1,0 +1,9 @@
+{
+  "name": "alfa-bravo-desk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Spell it out with the NATO phonetic alphabet, find it in text, and hear it. Day129.",
+  "scripts": { "test": "node --test \"test/**/*.test.js\"" },
+  "engines": { "node": ">=22" },
+  "license": "MIT"
+}

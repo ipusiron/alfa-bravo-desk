@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-src 'none'; object-src 'none'; connect-src 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>Alfa Bravo Desk</title>
+  <meta name="description" content="英字や数字を聞き違えずに伝えるための通話表（NATOフォネティックコード）を、伝える・文章から見つける・覚えるの3つの場面で使うツール。ブラウザーの声で読み上げ、外部へは何も送らない。日英対応。">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="style.css">
+  <script src="theme-init.js"></script>
+  <script src="js/abd-core.js" defer></script>
+  <script src="js/messages.js" defer></script>
+  <script src="js/i18n.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="site-header wrap">
+    <div class="header-content">
+      <div class="header-title">
+        <h1>Alfa Bravo <span>Desk</span></h1>
+        <p class="subtitle" data-i18n="subtitle">聞き違えない綴りの伝え方を、読み上げて確かめる通話表ツール</p>
+      </div>
+      <div class="header-buttons">
+        <button id="language" class="tool-button" type="button" data-i18n="languageButton" data-i18n-attr="aria-label:languageToggle" aria-label="EN：英語の表示にする">EN</button>
+        <button id="theme" class="tool-button" type="button"><span class="tool-icon" aria-hidden="true">◐</span><span id="theme-label">暗くする</span></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="intro" aria-label="Alfa Bravo Desk">
+      <p class="intro-lead" data-i18n="introLead">英字や数字を電話や無線で伝えると、MとN、GとJのように聞き違えやすい文字があります。</p>
+      <details id="intro-more" class="intro-more" open>
+        <summary data-i18n="introMore">くわしく（このツールでできること）</summary>
+        <h2 class="intro-heading" data-i18n="introFeaturesHeading">このツールでできること</h2>
+        <ul class="intro-list">
+          <li data-i18n="introFeature1">パスワードや予約番号を1文字ずつ通話表の単語に置き換え、ブラウザーの声で読み上げる</li>
+          <li data-i18n="introFeature2">文章に紛れたAlfa・Bravoなどの単語を見つけ、英字の列に戻す</li>
+          <li data-i18n="introFeature3">26文字と10の数字の読み方と、表の由来や決まりをカードで覚える</li>
+        </ul>
+      </details>
+      <p class="note" data-i18n="introNote">読み上げには端末に入っている声を使います。入力した文字は外部へ送りません。</p>
+    </section>
+    <noscript>このツールを使うには、JavaScriptを有効にしてください。 / Enable JavaScript to use this tool.</noscript>
+
+    <div class="tabs" role="tablist" data-i18n-attr="aria-label:tabsLabel" aria-label="ツールのタブ">
+      <button
+        id="tab-spell" class="tab" type="button" role="tab" aria-selected="true" aria-controls="panel-spell" data-tab="spell">
+        <span class="tab-name" data-i18n="tabSpell">綴りを伝える</span>
+        <span class="tab-en" lang="en">Spell out</span></button>
+      <button
+        id="tab-find" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-find" data-tab="find" tabindex="-1">
+        <span class="tab-name" data-i18n="tabFind">文章から見つける</span>
+        <span class="tab-en" lang="en">Find in text</span></button>
+      <button
+        id="tab-reference" class="tab" type="button" role="tab" aria-selected="false" aria-controls="panel-reference" data-tab="reference" tabindex="-1">
+        <span class="tab-name" data-i18n="tabReference">一覧と座学</span>
+        <span class="tab-en" lang="en">Reference</span></button>
+    </div>
+
+    <div class="panels">
+      <!-- 綴りを伝える -->
+      <section id="panel-spell" class="panel" role="tabpanel" aria-labelledby="tab-spell">
+        <h2 data-i18n="tabSpell">綴りを伝える</h2>
+        <p class="lead" data-i18n="spellLead">伝えたい文字列を入れると、1文字ずつ通話表の単語に置き換えます。</p>
+        <label class="field" for="spell-input" data-i18n="spellInputLabel">伝えたい文字列</label>
+        <input id="spell-input" type="text" value="Pa55w0rd!" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <p id="spell-counter" class="counter"></p>
+        <p id="spell-over" class="warn" role="status" hidden></p>
+        <div class="row">
+          <fieldset class="seg">
+            <legend data-i18n="caseLegend">大文字と小文字</legend>
+            <div class="seg-buttons">
+              <button id="case-on" type="button" aria-pressed="true" data-i18n="caseOn">区別して伝える</button>
+              <button id="case-off" type="button" aria-pressed="false" data-i18n="caseOff">区別しない</button>
+            </div>
+            <p id="case-note" class="seg-note"></p>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-i18n="digitLegend">数字の読み方</legend>
+            <div class="seg-buttons">
+              <button id="digit-plain" type="button" aria-pressed="true" data-i18n="digitPlain">ふつうの英語</button>
+              <button id="digit-icao" type="button" aria-pressed="false" data-i18n="digitIcao">ICAO式</button>
+            </div>
+            <p id="digit-note" class="seg-note"></p>
+          </fieldset>
+        </div>
+        <div class="result-head">
+          <h3 data-i18n="resultHeading">置き換えた結果</h3>
+          <span id="spell-summary" class="status"></span>
+        </div>
+        <p class="english-note" data-i18n="englishNote">読み上げとコピーは英語です。</p>
+        <div class="table-wrap">
+          <table id="spell-table" class="spell-table">
+            <thead>
+              <tr><th scope="col" class="num" data-i18n="colOrder">順</th><th scope="col" class="ch" data-i18n="colChar">文字</th><th scope="col" data-i18n="colReading">読み方</th><th scope="col" class="type" data-i18n="colType">種類</th></tr>
+            </thead>
+            <tbody id="spell-body"></tbody>
+          </table>
+        </div>
+        <p id="spell-empty" class="empty" hidden></p>
+        <div class="actions">
+          <button id="spell-speak" class="primary" type="button" data-i18n="speak">▶ 読み上げる</button>
+          <button id="spell-stop" type="button" data-i18n="stop" disabled>■ 止める</button>
+        </div>
+        <div class="speed-row">
+          <fieldset class="seg seg-inline">
+            <legend data-i18n="speedLegend">速さ</legend>
+            <div class="seg-buttons">
+              <button type="button" aria-pressed="true" data-speed="normal" data-i18n="speedNormal">ふつう</button>
+              <button type="button" aria-pressed="false" data-speed="slow" data-i18n="speedSlow">ゆっくり</button>
+            </div>
+          </fieldset>
+          <p id="spell-status" class="status speak-status" aria-live="polite"></p>
+        </div>
+        <div class="copy-box">
+          <p class="copy-label" data-i18n="copyLabel">読み方を1行にまとめたもの（英語）</p>
+          <p id="spell-copy-text" class="copy-text" lang="en"></p>
+        </div>
+        <div class="actions">
+          <button id="spell-copy" type="button" data-i18n="copySpell">読み方をコピー</button>
+          <span id="spell-copy-status" class="status" aria-live="polite"></span>
+        </div>
+      </section>
+
+      <!-- 文章から見つける -->
+      <section id="panel-find" class="panel" role="tabpanel" aria-labelledby="tab-find" hidden>
+        <h2 data-i18n="tabFind">文章から見つける</h2>
+        <p class="lead" data-i18n="findLead">文章を貼ると、通話表の単語に印を付け、英字の列に戻します。</p>
+        <p class="lead" data-i18n="findLead2">2語以上続けて並んだ単語だけを英字の列に入れます。</p>
+        <label class="field" for="find-input" data-i18n="findInputLabel">文章</label>
+        <textarea id="find-input" rows="4" spellcheck="false" lang="en"></textarea>
+        <p id="find-counter" class="counter"></p>
+        <p id="find-over" class="warn" role="status" hidden></p>
+        <div class="row">
+          <button id="find-example" type="button" data-i18n="exampleButton">例を入れる</button>
+          <fieldset class="seg">
+            <legend data-i18n="digitWordsLegend">数字の単語（Zero〜Nine・Ninerなど）</legend>
+            <div class="seg-buttons">
+              <button id="digits-on" type="button" aria-pressed="true" data-i18n="digitWordsOn">拾う</button>
+              <button id="digits-off" type="button" aria-pressed="false" data-i18n="digitWordsOff">拾わない</button>
+            </div>
+          </fieldset>
+        </div>
+        <div class="result-head">
+          <h3 data-i18n="foundHeading">見つかった単語</h3>
+          <span id="find-count" class="status"></span>
+        </div>
+        <p class="seg-note" data-i18n="markLegend">色の付いた印は続けて並んだ語、点線の印は単独で見つかった語です。</p>
+        <div id="find-text" class="found-text" lang="en"></div>
+        <h3 data-i18n="decodedHeading">戻した英字の列</h3>
+        <p class="seg-note" data-i18n="decodedNote">続けて並んだ語のまとまりごとに、空白で区切ります。</p>
+        <div id="decoded" class="decoded" lang="en"></div>
+        <p id="decoded-line" class="decoded-line" lang="en"></p>
+        <div class="actions">
+          <button id="find-speak" class="primary" type="button" data-i18n="speakDecoded">▶ 英字の列を読み上げる</button>
+          <button id="find-stop" type="button" data-i18n="stop" disabled>■ 止める</button>
+          <button id="find-copy" type="button" data-i18n="copyDecoded">英字の列をコピー</button>
+        </div>
+        <div class="speed-row">
+          <fieldset class="seg seg-inline">
+            <legend data-i18n="speedLegend">速さ</legend>
+            <div class="seg-buttons">
+              <button type="button" aria-pressed="true" data-speed="normal" data-i18n="speedNormal">ふつう</button>
+              <button type="button" aria-pressed="false" data-speed="slow" data-i18n="speedSlow">ゆっくり</button>
+            </div>
+          </fieldset>
+          <p id="find-status" class="status speak-status" aria-live="polite"></p>
+        </div>
+        <p id="find-copy-status" class="status" aria-live="polite"></p>
+        <h3 data-i18n="singlesHeading">単独で見つかった語</h3>
+        <p class="seg-note" data-i18n="singlesNote">ふつうの英文の単語が通話表の単語と同じ綴りのことがあるため、英字の列には入れません。</p>
+        <ul id="singles" class="singles" lang="en"></ul>
+        <h3 data-i18n="variantsHeading">綴りの揺れとして拾った単語</h3>
+        <div class="table-wrap">
+          <table id="variants-table" class="variants-table">
+            <thead>
+              <tr><th scope="col" data-i18n="colFoundWord">文章の中の単語</th><th scope="col" data-i18n="colCanon">通話表の綴り</th><th scope="col" class="nowrap" data-i18n="colChar2">表す文字</th></tr>
+            </thead>
+            <tbody id="variants-body"></tbody>
+          </table>
+        </div>
+        <p id="variants-empty" class="empty" hidden></p>
+        <p class="seg-note" data-i18n="variantsNote">拾う揺れ：Alpha（通話表ではAlfa）など。</p>
+      </section>
+
+      <!-- 一覧と座学 -->
+      <section id="panel-reference" class="panel" role="tabpanel" aria-labelledby="tab-reference" hidden>
+        <h2 data-i18n="tabReference">一覧と座学</h2>
+        <p class="lead" data-i18n="refLead">カードを押すと、その単語を英語の声で読み上げます。カタカナは読み方の目安です。</p>
+        <p id="ref-status" class="status speak-status" aria-live="polite"></p>
+        <h3 data-i18n="lettersHeading">英字（A〜Z）</h3>
+        <div id="letter-grid" class="letter-grid"></div>
+        <h3 data-i18n="digitsHeading">数字（0〜9）</h3>
+        <div id="digit-grid" class="letter-grid"></div>
+        <p class="seg-note" data-i18n="digitsNote">ICAO式の綴りは、数字の発音の表記をもとにしたものです。</p>
+        <h3 data-i18n="studyHeading">座学</h3>
+        <div class="study-grid">
+          <article class="study-card">
+            <h4><span class="no">1</span><span data-i18n="study1Title">何のための表か</span></h4>
+            <p data-i18n="study1Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study1Head1"></th><th scope="col" data-i18n="study1Head2"></th></tr></thead>
+              <tbody>
+                <tr><td data-i18n="study1Row1a"></td><td data-i18n="study1Row1b"></td></tr>
+                <tr><td data-i18n="study1Row2a"></td><td data-i18n="study1Row2b"></td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="study-card">
+            <h4><span class="no">2</span><span data-i18n="study2Title">ICAOとNATO</span></h4>
+            <p data-i18n="study2Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study2Head1"></th><th scope="col" data-i18n="study2Head2"></th></tr></thead>
+              <tbody>
+                <tr><td class="nowrap" data-i18n="study2Row1a"></td><td data-i18n="study2Row1b"></td></tr>
+                <tr><td class="nowrap" data-i18n="study2Row2a"></td><td data-i18n="study2Row2b"></td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="study-card">
+            <h4><span class="no">3</span><span data-i18n="study3Title">綴りの決まり</span></h4>
+            <p data-i18n="study3Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study3Head1"></th><th scope="col" data-i18n="study3Head2"></th></tr></thead>
+              <tbody class="mono-cells" lang="en">
+                <tr><td>Alfa</td><td>AL FAH</td></tr>
+                <tr><td>Juliett</td><td>JEW LEE ETT</td></tr>
+                <tr><td>X-ray</td><td>ECKS RAY</td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="study-card">
+            <h4><span class="no">4</span><span data-i18n="study4Title">数字の読み方</span></h4>
+            <p data-i18n="study4Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study4Head1"></th><th scope="col" data-i18n="study4Head2"></th><th scope="col" data-i18n="study4Head3"></th></tr></thead>
+              <tbody class="mono-cells" lang="en">
+                <tr><td>3</td><td>Three</td><td>Tree</td></tr>
+                <tr><td>4</td><td>Four</td><td>Fower</td></tr>
+                <tr><td>5</td><td>Five</td><td>Fife</td></tr>
+                <tr><td>9</td><td>Nine</td><td>Niner</td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="study-card">
+            <h4><span class="no">5</span><span data-i18n="study5Title">日本の通話表</span></h4>
+            <p data-i18n="study5Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study5Head1"></th><th scope="col" data-i18n="study5Head2"></th></tr></thead>
+              <tbody>
+                <tr><td class="nowrap" data-i18n="study5Row1a"></td><td data-i18n="study5Row1b"></td></tr>
+                <tr><td class="nowrap" data-i18n="study5Row2a"></td><td data-i18n="study5Row2b"></td></tr>
+              </tbody>
+            </table>
+          </article>
+          <article class="study-card">
+            <h4><span class="no">6</span><span data-i18n="study6Title">伝え間違いを防ぐために</span></h4>
+            <p data-i18n="study6Body"></p>
+            <table>
+              <thead><tr><th scope="col" data-i18n="study6Head1"></th><th scope="col" data-i18n="study6Head2"></th></tr></thead>
+              <tbody>
+                <tr><td class="mono" data-i18n="study6Row1a"></td><td data-i18n="study6Row1b"></td></tr>
+                <tr><td class="mono" data-i18n="study6Row2a"></td><td data-i18n="study6Row2b"></td></tr>
+                <tr><td class="mono" data-i18n="study6Row3a"></td><td data-i18n="study6Row3b"></td></tr>
+                <tr><td class="mono" data-i18n="study6Row4a"></td><td data-i18n="study6Row4b"></td></tr>
+              </tbody>
+            </table>
+          </article>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <footer class="site-footer wrap">
+    <h2 data-i18n="sourcesHeading">出典と関連ツール</h2>
+    <ul class="sources">
+      <li><a href="https://laws.e-gov.go.jp/law/325M50080000017" target="_blank" rel="noopener noreferrer" data-i18n="source1">無線局運用規則 第14条第3項・別表第五号「通話表」（e-Gov法令検索）</a></li>
+      <li><a href="https://www.icao.int/sites/default/files/postalhistory/annex_10_aeronautical_telecommunications.htm" target="_blank" rel="noopener noreferrer" data-i18n="source2">ICAO「Annex 10 - Aeronautical Telecommunications」の沿革</a></li>
+      <li><a href="https://unitingaviation.com/?p=18560" target="_blank" rel="noopener noreferrer" data-i18n="source3">ICAO Uniting Aviation</a></li>
+      <li><a href="https://www.caa.co.uk/our-work/publications/documents/content/cap-413/" target="_blank" rel="noopener noreferrer" data-i18n="source4">UK CAA「CAP 413 Radiotelephony Manual」</a></li>
+    </ul>
+    <h3 data-i18n="relatedHeading">関連ツール</h3>
+    <ul class="sources">
+      <li><a href="https://ipusiron.github.io/morse-tree-visualizer/" target="_blank" rel="noopener noreferrer" data-i18n="related1">MorseTree Visualizer</a></li>
+      <li><a href="https://ipusiron.github.io/polybius-cipherlab/" target="_blank" rel="noopener noreferrer" data-i18n="related2">Polybius CipherLab</a></li>
+    </ul>
+    <p class="github"><a href="https://github.com/ipusiron/alfa-bravo-desk" target="_blank" rel="noopener noreferrer" data-i18n="githubLink">GitHub（ipusiron/alfa-bravo-desk）</a></p>
+  </footer>
+</body>
+</html>
