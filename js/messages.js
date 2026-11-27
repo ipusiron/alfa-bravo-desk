@@ -106,6 +106,11 @@
     spellIdle: '「読み上げる」を押すと、表の上から順に読みます。',
     spellReading: '{n}文字目を読んでいます',
     spellSkipped: '名前のない記号と読み替えのない文字（{n}文字）は飛ばします。',
+    sayCase: '読み上げで大文字・小文字も言う',
+    switchOn: 'オン',
+    switchOff: 'オフ',
+    sayCaseNoteOn: 'オフにすると、声だけCapital・Smallを言いません（表とコピーはそのままです）。',
+    sayCaseNoteOff: '「大文字と小文字」を「区別しない」にしているため、使えません。',
     copyLabel: '読み方を1行にまとめたもの（英語）',
     copySpell: '読み方をコピー',
 
@@ -373,6 +378,11 @@
     spellIdle: 'Press Read aloud to hear the table from the top.',
     spellReading: 'Reading character {n}',
     spellSkipped: 'Symbols without a name and characters without a code word ({n}) are skipped.',
+    sayCase: 'Say capital / small',
+    switchOn: 'On',
+    switchOff: 'Off',
+    sayCaseNoteOn: 'When off, only the voice leaves out "Capital" and "Small"; the table and the copy stay the same.',
+    sayCaseNoteOff: 'Not available while capital and small letters are ignored.',
     copyLabel: 'The readings on one line (English)',
     copySpell: 'Copy the readings',
 

@@ -130,9 +130,12 @@
     return items.map((item) => (item.spoken === null ? item.ch : item.spoken)).join(', ');
   }
 
-  // 読み上げる順の一覧（読まない文字は飛ばす）。index は表の行の番号（0から）
-  function speechQueue(items) {
-    return items.filter((item) => item.spoken !== null).map((item) => ({ index: item.index, text: speechText(item.spoken) }));
+  // 読み上げる順の一覧（読まない文字は飛ばす）。index は表の行の番号（0から）。
+  // options.sayCase が false なら、声だけ Capital／Small を言わない（表とコピーはそのまま）
+  function speechQueue(items, options = {}) {
+    const sayCase = options.sayCase !== false;
+    return items.filter((item) => item.spoken !== null)
+      .map((item) => ({ index: item.index, text: speechText(!sayCase && item.type === 'letter' ? item.word : item.spoken) }));
   }
 
   // ===== タブ2：文章から見つける =====

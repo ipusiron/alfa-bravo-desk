@@ -70,7 +70,8 @@ SUBTITLE_BREAK = """() => { const p = document.querySelector('.subtitle');
   const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 6);
   const tops = new Set([...r.getClientRects()].map(x => Math.round(x.top))); return tops.size > 1 ? 'broken' : ''; }"""
 
-SPELL_SWITCHES = ("spelling-common", "digit-icao", "digit-icao-plain", "case-off", "spelling-official", "digit-plain", "case-on")
+SPELL_SWITCHES = ("spelling-common", "digit-icao", "digit-icao-plain", "case-off", "spelling-official", "digit-plain", "case-on", "say-case",
+                  "say-case")
 # The run of letters of the test of the core (one letter each, a line break every 16 letters)
 SPACED = "\n".join([
     "A L P H A M I K E E C H O T A N", "G O H O T E L Y A N K E E S I E", "R R A T A N G O D E L T A I N D",
@@ -351,6 +352,22 @@ def test_spelling_and_find(browser, url, name, output=None):
     page.click("#spell-speak")
     check(log()[-1]["text"] == "Capital Alpha", (name, "voice follows the spelling"))
     page.click("#spell-stop")
+    # The switch "Say capital / small": on by default; off leaves them out of the voice only
+    check(page.get_attribute("#say-case", "aria-checked") == "true", (name, "say case on by default"))
+    check(page.get_attribute("#say-case", "role") == "switch", (name, "switch role"))
+    page.click("#say-case")
+    check(page.get_attribute("#say-case", "aria-checked") == "false" and page.text_content("#say-case-state") == "オフ", (name, "switch off"))
+    page.click("#spell-speak")
+    check(log()[-1]["text"] == "Alpha", (name, "voice without capital", log()[-1]))
+    page.click("#spell-stop")
+    check(page.text_content("#spell-copy-text") == "Capital Alpha, Small Juliet, One", (name, "copy keeps capital"))
+    check(page.evaluate("document.querySelector('#spell-body tr .case').textContent") == "大文字の", (name, "table keeps capital"))
+    page.click("#case-off")
+    check(page.is_disabled("#say-case"), (name, "switch disabled when ignoring case"))
+    check(page.evaluate("document.querySelector('#say-case-note .on').textContent").startswith("「大文字と小文字」を「区別しない」"), (name, "reason"))
+    page.click("#case-on")
+    page.click("#say-case")
+    check(page.get_attribute("#say-case", "aria-checked") == "true", (name, "switch back on"))
     page.click("#spelling-official")
     page.click("#digit-plain")
     check(page.text_content("#spell-copy-text") == "Capital Alfa, Small Juliett, One", (name, "copy official"))

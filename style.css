@@ -357,3 +357,27 @@ p, li, .seg-note.stack > span { text-wrap: pretty; }
 }
 .notice-label { display: inline-block; margin-right: .5rem; font-weight: 700; }
 .notice-howto { display: block; margin-top: .2rem; }
+
+/* ===== オン・オフのスイッチ（読み上げで大文字・小文字も言う） ===== */
+.switch { display: inline-flex; align-items: center; gap: .5rem; text-align: left; }
+.switch-track {
+  position: relative;
+  flex: none;
+  width: 2.6rem;
+  height: 1.5rem;
+  border: 2px solid var(--muted);
+  border-radius: 999px;
+  background: var(--bg);
+}
+.switch-knob {
+  position: absolute;
+  top: .125rem;
+  left: .125rem;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.switch[aria-checked="true"] .switch-track { border-color: var(--accent); background: var(--accent); }
+.switch[aria-checked="true"] .switch-knob { left: auto; right: .125rem; background: var(--on-accent); }
+.switch-state { font-weight: 700; min-width: 2em; }

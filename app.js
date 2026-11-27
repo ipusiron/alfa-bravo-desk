@@ -34,6 +34,7 @@
     caseMode: 'distinguish',
     digitMode: 'plain',
     letterSpelling: 'official',
+    sayCase: true,
     findDigits: true,
     findMode: 'auto',
     undo: null,
@@ -297,9 +298,24 @@
       state.letterSpelling === 'common' ? 'spellingNoteCommon' : 'spellingNoteOfficial');
     stackNote($('digit-note'), ['digitNotePlain', 'digitNoteIcao', 'digitNoteIcaoPlain'],
       { plain: 'digitNotePlain', icao: 'digitNoteIcao', icaoPlain: 'digitNoteIcaoPlain' }[state.digitMode]);
+    renderSayCase();
     if (!speech.owner || speech.owner.name !== 'spell') setSpellIdle();
     refreshSpeakButtons();
   }
+  // 読み上げで大文字・小文字も言うかのスイッチ。表で区別しないときは、言うものがないので押せない
+  function renderSayCase() {
+    const button = $('say-case');
+    const usable = state.caseMode !== 'ignore';
+    button.disabled = !usable;
+    button.setAttribute('aria-checked', state.sayCase ? 'true' : 'false');
+    $('say-case-state').textContent = t(state.sayCase ? 'switchOn' : 'switchOff');
+    stackNote($('say-case-note'), ['sayCaseNoteOn', 'sayCaseNoteOff'], usable ? 'sayCaseNoteOn' : 'sayCaseNoteOff');
+  }
+  $('say-case').addEventListener('click', () => {
+    state.sayCase = !state.sayCase;
+    stopSpeaking();
+    renderSayCase();
+  });
   // 切り替えの下の説明：選べる文をすべて同じ場所に重ね、選んだ文だけを見せる（高さは長い文に合わせて変わらない）
   function stackNote(el, keys, active) {
     el.replaceChildren(...keys.map((key) => {
@@ -323,7 +339,7 @@
     if (tr) { tr.classList.add('now'); tr.scrollIntoView({ block: 'nearest' }); }
   }
   $('spell-speak').addEventListener('click', () => {
-    speakQueue('spell', Core.speechQueue(state.spellItems), (index) => {
+    speakQueue('spell', Core.speechQueue(state.spellItems, { sayCase: state.sayCase }), (index) => {
       markSpellRow(index);
       $('spell-status').textContent = t('spellReading', { n: index + 1 });
     }, (reason) => {

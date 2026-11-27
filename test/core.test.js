@@ -140,6 +140,20 @@ test('綴りの切り替え：英字2択×数字3択の6通りすべて（表示
   assert.deepEqual(C.spell('A1', { letterSpelling: 'x', digitMode: 'y' }).map((x) => x.spoken), ['Capital Alfa', 'One']);
 });
 
+test('読み上げで大文字・小文字も言うか：言わないときは声だけ Capital／Small を外し、表とコピーはそのまま', () => {
+  const items = C.spell('Pa5!');
+  assert.deepEqual(C.speechQueue(items).map((q) => q.text), ['Capital Papa', 'Small Alpha', 'Five', 'Exclamation mark']);
+  assert.deepEqual(C.speechQueue(items, { sayCase: true }).map((q) => q.text), ['Capital Papa', 'Small Alpha', 'Five', 'Exclamation mark']);
+  assert.deepEqual(C.speechQueue(items, { sayCase: false }).map((q) => q.text), ['Papa', 'Alpha', 'Five', 'Exclamation mark']);
+  assert.equal(C.copyLine(items), 'Capital Papa, Small Alfa, Five, Exclamation mark');
+  // 英語でよく見る綴りでも同じ
+  const common = C.spell('Jx', { letterSpelling: 'common' });
+  assert.deepEqual(C.speechQueue(common, { sayCase: false }).map((q) => q.text), ['Juliet', 'X-ray']);
+  // 表で区別しないときは、どちらでも同じ
+  const ignore = C.spell('Pa', { caseMode: 'ignore' });
+  assert.deepEqual(C.speechQueue(ignore, { sayCase: true }), C.speechQueue(ignore, { sayCase: false }));
+});
+
 test('速さと語の間：ふつう1.0・ゆっくり0.7、間はゆっくりのほうが長い', () => {
   assert.deepEqual({ ...C.RATES }, { normal: 1.0, slow: 0.7 });
   assert.deepEqual({ ...C.GAP_MS }, { normal: 350, slow: 700 });

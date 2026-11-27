@@ -114,7 +114,13 @@
         <div class="actions">
           <button id="spell-speak" class="primary" type="button" data-i18n="speak">▶ 読み上げる</button>
           <button id="spell-stop" type="button" data-i18n="stop" disabled>■ 止める</button>
+          <button id="say-case" class="switch" type="button" role="switch" aria-checked="true">
+            <span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span>
+            <span class="switch-label" data-i18n="sayCase">読み上げで大文字・小文字も言う</span>
+            <span id="say-case-state" class="switch-state" aria-hidden="true">オン</span>
+          </button>
         </div>
+        <p id="say-case-note" class="seg-note stack"></p>
         <div class="speed-row">
           <fieldset class="seg seg-inline">
             <legend data-i18n="speedLegend">速さ</legend>
