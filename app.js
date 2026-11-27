@@ -145,8 +145,8 @@
     I18n.set(document, I18n.lang === 'ja' ? 'en' : 'ja');
   });
 
-  // 幅390px未満では「できること」を「くわしく」の中にたたむ
-  const wide = window.matchMedia('(min-width: 390px)');
+  // 幅600px未満では「できること」を「くわしく」の中にたたむ（スマートフォンで開いた直後にタブが見えるように）
+  const wide = window.matchMedia('(min-width: 600px)');
   const syncIntro = () => { $('intro-more').open = wide.matches; };
   if (typeof wide.addEventListener === 'function') wide.addEventListener('change', syncIntro);
   else if (typeof wide.addListener === 'function') wide.addListener(syncIntro);

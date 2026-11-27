@@ -62,6 +62,13 @@ FAKE_SPEECH = """(() => {
 CSP_WATCH = """document.addEventListener('securitypolicyviolation', (e) => {
   (window.__csp = window.__csp || []).push(e.violatedDirective + ' ' + e.blockedURI); });"""
 
+# '' when 通話表ツール in the subtitle sits on one line
+SUBTITLE_BREAK = """() => { const p = document.querySelector('.subtitle');
+  const node = [...p.childNodes].find(n => n.nodeType === 3 && n.textContent.includes('通話表ツール'));
+  if (!node) return 'not in one text node'; const i = node.textContent.indexOf('通話表ツール');
+  const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 6);
+  const tops = new Set([...r.getClientRects()].map(x => Math.round(x.top))); return tops.size > 1 ? 'broken' : ''; }"""
+
 FAILURES = []
 
 
@@ -125,10 +132,21 @@ def test_layout(browser, url, width, height, language, theme, name):
     check(page.evaluate("document.documentElement.lang") == language, (name, "lang"))
     check(page.evaluate("document.documentElement.dataset.theme") == theme, (name, "theme"))
     check(page.evaluate("window.__speechLog.length") == 0, (name, "nothing is read when the page opens"))
-    # Under 390 px the list of what the tool does folds into "More"; from 390 px it is open and its summary hidden
+    # Under 600 px the list of what the tool does folds into "More"; from 600 px it is open and its summary hidden
     opened = page.evaluate("document.getElementById('intro-more').open")
-    check(opened == (width >= 390), (name, "intro folded", opened))
+    check(opened == (width >= 600), (name, "intro folded", opened))
+    # Right after opening on a phone (390x844), the whole tab bar is on the screen
+    if (width, height) == (390, 844):
+        bottom = page.evaluate("document.querySelector('.tabs').getBoundingClientRect().bottom")
+        check(bottom <= height, (name, "tab bar below the first screen", bottom))
+    # The subtitle never breaks inside 通話表ツール
+    if language == "ja":
+        broken = page.evaluate(SUBTITLE_BREAK)
+        check(not broken, (name, "subtitle", broken))
     bar_top = "document.querySelector('.tabs').getBoundingClientRect().top"
+    bar_height = "document.querySelector('.tabs').getBoundingClientRect().height"
+    lines = "[...document.querySelectorAll('.tab-name')].map(e => Math.round(e.getBoundingClientRect().height))"
+    first_height, first_lines = page.evaluate(bar_height), page.evaluate(lines)
     for tab in TABS:
         # The tab is pressed in place (a script click, so that the test does not scroll): the tab bar must not move
         before = page.evaluate(bar_top)
@@ -136,6 +154,9 @@ def test_layout(browser, url, width, height, language, theme, name):
         page.wait_for_timeout(50)
         after = page.evaluate(bar_top)
         check(abs(after - before) < 1, (name, tab, "tab bar moved", before, after))
+        # Choosing a tab changes neither the height of the bar nor how each tab name wraps
+        check(abs(page.evaluate(bar_height) - first_height) < 1, (name, tab, "tab bar height changed"))
+        check(page.evaluate(lines) == first_lines, (name, tab, "tab names wrap differently", first_lines, page.evaluate(lines)))
         check(page.evaluate(f"!document.getElementById('panel-{tab}').hidden"), (name, tab, "panel shown"))
         check(page.evaluate("location.hash") == "#" + tab, (name, tab, "hash"))
         if tab == "find":
