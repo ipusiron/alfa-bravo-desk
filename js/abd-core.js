@@ -25,7 +25,12 @@
   const RATES = Object.freeze({ normal: 1.0, slow: 0.7 });
   const GAP_MS = Object.freeze({ normal: 350, slow: 700 });
 
-  // ===== 英字：単語・読み方の目安（カタカナ）・発音の表記（別表第五号） =====
+  // ===== 英語でよく見る綴り（原典の綴りとは違うもの）。「英字の綴り」で選べる =====
+  const COMMON_SPELLINGS = Object.freeze({ A: 'Alpha', J: 'Juliet', W: 'Whisky', X: 'Xray' });
+  const LETTER_SPELLINGS = Object.freeze(['official', 'common']);
+  const DIGIT_MODES = Object.freeze(['plain', 'icao', 'icaoPlain']);
+
+  // ===== 英字：単語・読み方の目安（カタカナ）・発音の表記（別表第五号）・英語でよく見る綴り =====
   const LETTERS = Object.freeze([
     ['A', 'Alfa', 'アルファ', 'AL FAH'], ['B', 'Bravo', 'ブラボー', 'BRAH VOH'], ['C', 'Charlie', 'チャーリー', 'CHAR LEE'],
     ['D', 'Delta', 'デルタ', 'DELL TAH'], ['E', 'Echo', 'エコー', 'ECK OH'], ['F', 'Foxtrot', 'フォックストロット', 'FOKS TROT'],
@@ -36,14 +41,15 @@
     ['S', 'Sierra', 'シエラ', 'SEE AIR RAH'], ['T', 'Tango', 'タンゴ', 'TANG GO'], ['U', 'Uniform', 'ユニフォーム', 'YOU NEE FORM'],
     ['V', 'Victor', 'ビクター', 'VIK TAH'], ['W', 'Whiskey', 'ウィスキー', 'WISS KEY'], ['X', 'X-ray', 'エックスレイ', 'ECKS RAY'],
     ['Y', 'Yankee', 'ヤンキー', 'YANG KEY'], ['Z', 'Zulu', 'ズールー', 'ZOO LOO'],
-  ].map(([ch, word, kana, pron]) => Object.freeze({ ch, word, kana, pron })));
+  ].map(([ch, word, kana, pron]) => Object.freeze({ ch, word, kana, pron, alt: COMMON_SPELLINGS[ch] || null })));
 
-  // ===== 数字：ふつうの英語・ICAO式（発音の表記をもとにした綴り）・読み方の目安 =====
+  // ===== 数字：ふつうの英語・ICAO式（原典の綴り）・ICAO式（ふつうの綴り）・読み方の目安 =====
+  // ICAO式・ふつうの綴りは、音の違う3・5・9（Tree・Fife・Niner）だけ ICAO式にし、ほかはふつうの英語の綴りにしたもの
   const DIGITS = Object.freeze([
     ['0', 'Zero', 'Zero', 'ゼロ'], ['1', 'One', 'Wun', 'ワン'], ['2', 'Two', 'Too', 'ツー'], ['3', 'Three', 'Tree', 'スリー'],
     ['4', 'Four', 'Fower', 'フォー'], ['5', 'Five', 'Fife', 'ファイブ'], ['6', 'Six', 'Six', 'シックス'], ['7', 'Seven', 'Seven', 'セブン'],
     ['8', 'Eight', 'Ait', 'エイト'], ['9', 'Nine', 'Niner', 'ナイン'],
-  ].map(([ch, word, icao, kana]) => Object.freeze({ ch, word, icao, kana })));
+  ].map(([ch, word, icao, kana]) => Object.freeze({ ch, word, icao, kana, icaoPlain: ['3', '5', '9'].includes(ch) ? icao : word })));
 
   // ===== 名前を持つ記号（パスワードによく使うもの）。画面の日本語の名前は messages.js の symbol.<id> =====
   const SYMBOLS = Object.freeze([
@@ -60,8 +66,9 @@
 
   // ===== 読み上げだけの綴りの置き換え（画面とコピーには正式な綴りを出す） =====
   // Juliett・Alfa は声が綴りどおりに崩れやすいので英語のふつうの綴りで読ませる。Wun・Too・Ait は One・Two・Eight と同じ音。
-  // Fower は「フラワー」に寄らないよう、音の切れ目を入れる。
-  const SPEECH_REPLACE = Object.freeze({ Juliett: 'Juliet', Alfa: 'Alpha', Wun: 'One', Too: 'Two', Ait: 'Eight', Fower: 'Fow-er' });
+  // Fower は「フラワー」に寄らないよう、音の切れ目を入れる。英語でよく見る綴りの Xray は X-ray と同じ音で読ませる。
+  const SPEECH_REPLACE = Object.freeze({ Juliett: 'Juliet', Alfa: 'Alpha', Wun: 'One', Too: 'Two', Ait: 'Eight', Fower: 'Fow-er',
+    Xray: 'X-ray' });
   function speechText(text) {
     return String(text).split(' ').map((w) => (Object.prototype.hasOwnProperty.call(SPEECH_REPLACE, w) ? SPEECH_REPLACE[w] : w)).join(' ');
   }
@@ -79,22 +86,25 @@
 
   // ===== タブ1：綴りを伝える =====
   // options.caseMode: 'distinguish'（Capital／Small を付ける）か 'ignore'（綴りだけ）
-  // options.digitMode: 'plain'（One, Two…）か 'icao'（Wun, Too, Tree…）
+  // options.letterSpelling: 'official'（Alfa・Juliett・X-ray・Whiskey）か 'common'（Alpha・Juliet・Xray・Whisky）
+  // options.digitMode: 'plain'（One, Two…）か 'icao'（Wun, Too, Tree…）か 'icaoPlain'（One, Two, Tree…）
   // spoken は読み上げとコピーに使う英語（読まない文字は null）
   function spell(text, options = {}) {
     const caseMode = options.caseMode === 'ignore' ? 'ignore' : 'distinguish';
-    const digitMode = options.digitMode === 'icao' ? 'icao' : 'plain';
+    const digitMode = DIGIT_MODES.includes(options.digitMode) ? options.digitMode : 'plain';
+    const common = options.letterSpelling === 'common';
     const items = Array.from(String(text)).map((ch, index) => {
       const upper = ch.toUpperCase();
       if (/^[A-Za-z]$/.test(ch)) {
         const letter = letterOf.get(upper);
         const letterCase = caseMode === 'ignore' ? null : (ch === upper ? 'capital' : 'small');
         const prefix = letterCase === 'capital' ? CAPITAL + ' ' : letterCase === 'small' ? SMALL + ' ' : '';
-        return { index, ch, type: 'letter', word: letter.word, letterCase, spoken: prefix + letter.word };
+        const word = common && letter.alt ? letter.alt : letter.word;
+        return { index, ch, type: 'letter', word, letterCase, spoken: prefix + word };
       }
       if (digitOf.has(ch)) {
         const d = digitOf.get(ch);
-        const word = digitMode === 'icao' ? d.icao : d.word;
+        const word = digitMode === 'icao' ? d.icao : digitMode === 'icaoPlain' ? d.icaoPlain : d.word;
         return { index, ch, type: 'digit', word, letterCase: null, spoken: word };
       }
       if (symbolOf.has(ch)) {
@@ -142,9 +152,42 @@
   const X_JOINS = /^(?: |-|\r?\n)$/;
   const GAP_IN_RUN = /^[\s\p{P}]*$/u;
 
+  // 読み方：'words'＝単語の間に空白がある文章、'joined'＝英字が切れ目なく続く並び（1文字ずつ空白・改行で区切った並びを含む）
+  const FIND_MODES = Object.freeze(['auto', 'words', 'joined']);
+
+  // 自動の判断：英字のまとまりの8割以上が1文字（4つ以上）なら、1文字ずつ区切った並び。
+  // 英字のまとまりが3つまでで、どれも9文字以上（通話表の語より長い）なら、切れ目なく続く並び。それ以外は単語の間に空白がある文章
+  function detectMode(text) {
+    const tokens = String(text).match(/[A-Za-z]+/g) || [];
+    if (!tokens.length) return 'words';
+    const single = tokens.filter((t) => t.length === 1).length;
+    if (tokens.length >= 4 && single / tokens.length >= 0.8) return 'joined';
+    if (tokens.length <= 3 && tokens.every((t) => t.length >= 9)) return 'joined';
+    return 'words';
+  }
+
   function find(text, options = {}) {
     const source = String(text);
     const digits = options.digits !== false;
+    const requested = FIND_MODES.includes(options.mode) ? options.mode : 'auto';
+    const mode = requested === 'auto' ? detectMode(source) : requested;
+    const result = mode === 'joined' ? findJoined(source, digits) : findWords(source, digits);
+    // 揺れの一覧：同じ形（大文字と小文字を区別しない・空白類は1つの空白に）は1行にまとめ、最初に出た順に並べる
+    const variants = [];
+    const seen = new Set();
+    for (const m of result.matches) {
+      if (!m.variant) continue;
+      // 切れ目なく続く並びでは、あいだの空白・改行を除いた英字だけで示す
+      const shown = mode === 'joined' ? m.text.replace(/[^A-Za-z]/g, '') : m.text.replace(/\s+/g, ' ');
+      const key = shown.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      variants.push({ text: shown, canon: m.canon, char: m.char, variant: m.variant });
+    }
+    return { ...result, mode, auto: requested === 'auto', variants };
+  }
+
+  function findWords(source, digits) {
     const tokens = [...source.matchAll(/\p{L}+/gu)].map((m) => ({ text: m[0], start: m.index, end: m.index + m[0].length }));
     const matches = [];
     for (let i = 0; i < tokens.length; i++) {
@@ -179,17 +222,69 @@
     sequences.forEach((r, n) => r.forEach((k) => { matches[k].run = n; matches[k].inSequence = true; }));
     for (const k of singles) { matches[k].run = null; matches[k].inSequence = false; }
     const decodedRuns = sequences.map((r) => r.map((k) => matches[k].char).join(''));
-    // 揺れの一覧：同じ形（大文字と小文字を区別しない・空白類は1つの空白に）は1行にまとめ、最初に出た順に並べる
-    const variants = [];
-    const seen = new Set();
-    for (const m of matches) {
-      if (!m.variant) continue;
-      const key = m.text.toLowerCase().replace(/\s+/g, ' ');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      variants.push({ text: m.text.replace(/\s+/g, ' '), canon: m.canon, char: m.char, variant: m.variant });
+    return { matches, sequences, singles, decodedRuns, decoded: decodedRuns.join(' '), unread: [], parts: [] };
+  }
+
+  // 英字が切れ目なく続く並び：英字（A〜Z）だけを1本につなぎ、通話表の語（綴りの揺れ・数字の語を含む）に区切る。
+  // 区切り方は、読めない文字が最も少なくなるもの（同じなら語の数が少ないもの）を動的計画法で選ぶ。
+  // 読めない文字が続いた部分は「読めない部分」として1つにまとめ、英字の列ではその部分ごとに「?」を1つ置く。推測では埋めない
+  const JOINED_MAX = 8; // 通話表の語の最長（November・Whiskey などは8文字以下）
+  function findJoined(source, digits) {
+    const pos = [];
+    let letters = '';
+    for (const m of source.matchAll(/[A-Za-z]/g)) { pos.push(m.index); letters += m[0].toLowerCase(); }
+    const dict = new Map(FIND_WORDS);
+    dict.set('xray', { char: 'X', canon: 'X-ray', variant: null, kind: 'letter' });
+    if (digits) for (const [w, e] of DIGIT_WORDS) dict.set(w, e);
+    const n = letters.length;
+    const best = Array.from({ length: n + 1 }, () => null);
+    best[0] = { cost: 0, words: 0, prev: -1, word: null };
+    const better = (a, b) => !b || a.cost < b.cost || (a.cost === b.cost && a.words < b.words);
+    for (let i = 0; i < n; i++) {
+      if (!best[i]) continue;
+      const skip = { cost: best[i].cost + 1, words: best[i].words, prev: i, word: null };
+      if (better(skip, best[i + 1])) best[i + 1] = skip;
+      for (let len = 2; len <= JOINED_MAX && i + len <= n; len++) {
+        const entry = dict.get(letters.slice(i, i + len));
+        if (!entry) continue;
+        const take = { cost: best[i].cost, words: best[i].words + 1, prev: i, word: entry };
+        if (better(take, best[i + len])) best[i + len] = take;
+      }
     }
-    return { matches, sequences, singles, decodedRuns, decoded: decodedRuns.join(' '), variants };
+    const steps = [];
+    for (let j = n; j > 0; j = best[j].prev) steps.push({ from: best[j].prev, to: j, word: best[j].word });
+    steps.reverse();
+    const matches = [];
+    const unread = [];
+    const parts = [];
+    const span = (from, to) => ({ start: pos[from], end: pos[to - 1] + 1, text: source.slice(pos[from], pos[to - 1] + 1) });
+    for (const step of steps) {
+      if (step.word) {
+        matches.push({ ...span(step.from, step.to), ...step.word, run: 0, inSequence: true });
+        parts.push({ kind: 'word', k: matches.length - 1 });
+      } else if (parts.length && parts[parts.length - 1].kind === 'unread') {
+        const u = unread[unread.length - 1];
+        Object.assign(u, span(u.from, step.to), { letters: u.letters + 1 });
+      } else {
+        unread.push({ ...span(step.from, step.to), from: step.from, letters: 1 });
+        parts.push({ kind: 'unread', u: unread.length - 1 });
+      }
+    }
+    const sequences = matches.length ? [matches.map((_, k) => k)] : [];
+    const decoded = parts.map((p) => (p.kind === 'word' ? matches[p.k].char : '?')).join('');
+    return { matches, sequences, singles: [], decodedRuns: decoded ? [decoded] : [], decoded, unread, parts };
+  }
+
+  // 入力欄の空白（半角・全角・タブ）と改行を取り除く。count は取り除いた数（CRLF は改行1つ）
+  function removeSpaces(text) {
+    const source = String(text);
+    const count = (source.match(/[ \t　]/g) || []).length;
+    return { text: source.replace(/[ \t　]/g, ''), count };
+  }
+  function removeLineBreaks(text) {
+    const source = String(text);
+    const count = (source.match(/\r\n|\r|\n/g) || []).length;
+    return { text: source.replace(/\r\n|\r|\n/g, ''), count };
   }
 
   // 英字の列を読み上げる順（続けて並んだ語だけ）。text は通話表の綴りを読み上げ用に置き換えたもの
@@ -276,7 +371,8 @@
   }
 
   return Object.freeze({
-    MAX_SPELL, MAX_FIND, RATES, GAP_MS, LETTERS, DIGITS, SYMBOLS, SPACE_WORD, CAPITAL, SMALL, SPEECH_REPLACE,
-    speechText, clampText, spell, countTypes, copyLine, speechQueue, find, findQueue, pickVoice, phrases, formatNumber,
+    MAX_SPELL, MAX_FIND, RATES, GAP_MS, COMMON_SPELLINGS, LETTER_SPELLINGS, DIGIT_MODES, LETTERS, DIGITS, SYMBOLS, SPACE_WORD, CAPITAL, SMALL, SPEECH_REPLACE,
+    speechText, clampText, spell, countTypes, copyLine, speechQueue, FIND_MODES, detectMode, find, findQueue, removeSpaces, removeLineBreaks,
+    pickVoice, phrases, formatNumber,
   });
 }));

@@ -82,13 +82,62 @@ test('最大長：200文字（タブ2は5,000文字）。コードポイント�
 });
 
 test('読み上げ用の置き換え：画面とコピーは正式な綴り、声だけ読みやすい綴り', () => {
-  assert.deepEqual({ ...C.SPEECH_REPLACE }, { Juliett: 'Juliet', Alfa: 'Alpha', Wun: 'One', Too: 'Two', Ait: 'Eight', Fower: 'Fow-er' });
+  assert.deepEqual({ ...C.SPEECH_REPLACE },
+    { Juliett: 'Juliet', Alfa: 'Alpha', Wun: 'One', Too: 'Two', Ait: 'Eight', Fower: 'Fow-er', Xray: 'X-ray' });
   assert.equal(C.speechText('Capital Juliett'), 'Capital Juliet');
   assert.equal(C.speechText('Small Alfa'), 'Small Alpha');
   assert.equal(C.speechText('Bravo'), 'Bravo');
   const items = C.spell('Ja1', { digitMode: 'icao' });
   assert.equal(C.copyLine(items), 'Capital Juliett, Small Alfa, Wun');
   assert.deepEqual(C.speechQueue(items).map((q) => q.text), ['Capital Juliet', 'Small Alpha', 'One']);
+});
+
+// 綴りの切り替え：英字2択×数字3択のすべての組み合わせで、表示・コピー・読み上げを確かめる
+const LETTER_FORMS = {
+  official: ['Capital Alfa', 'Small Juliett', 'Capital X-ray', 'Small Whiskey', 'Capital Bravo'],
+  common: ['Capital Alpha', 'Small Juliet', 'Capital Xray', 'Small Whisky', 'Capital Bravo'],
+};
+const LETTER_SPEECH = {
+  official: ['Capital Alpha', 'Small Juliet', 'Capital X-ray', 'Small Whiskey', 'Capital Bravo'],
+  common: ['Capital Alpha', 'Small Juliet', 'Capital X-ray', 'Small Whisky', 'Capital Bravo'],
+};
+const DIGIT_FORMS = {
+  plain: ['Zero', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'],
+  icao: ['Zero', 'Wun', 'Too', 'Tree', 'Fower', 'Fife', 'Six', 'Seven', 'Ait', 'Niner'],
+  icaoPlain: ['Zero', 'One', 'Two', 'Tree', 'Four', 'Fife', 'Six', 'Seven', 'Eight', 'Niner'],
+};
+const DIGIT_SPEECH = {
+  plain: DIGIT_FORMS.plain,
+  icao: ['Zero', 'One', 'Two', 'Tree', 'Fow-er', 'Fife', 'Six', 'Seven', 'Eight', 'Niner'],
+  icaoPlain: DIGIT_FORMS.icaoPlain,
+};
+
+test('綴りの表：英語でよく見る綴りは A・J・W・X の4つ、数字は3つの読み方', () => {
+  assert.deepEqual({ ...C.COMMON_SPELLINGS }, { A: 'Alpha', J: 'Juliet', W: 'Whisky', X: 'Xray' });
+  assert.deepEqual(C.LETTERS.filter((l) => l.alt).map((l) => l.ch), ['A', 'J', 'W', 'X']);
+  assert.deepEqual([...C.LETTER_SPELLINGS], ['official', 'common']);
+  assert.deepEqual([...C.DIGIT_MODES], ['plain', 'icao', 'icaoPlain']);
+  assert.deepEqual(C.DIGITS.map((d) => d.icaoPlain), DIGIT_FORMS.icaoPlain);
+});
+
+test('綴りの切り替え：英字2択×数字3択の6通りすべて（表示・コピー・読み上げ）', () => {
+  let combos = 0;
+  for (const letterSpelling of C.LETTER_SPELLINGS) {
+    for (const digitMode of C.DIGIT_MODES) {
+      const items = C.spell('AjXwB0123456789', { letterSpelling, digitMode });
+      const expected = [...LETTER_FORMS[letterSpelling], ...DIGIT_FORMS[digitMode]];
+      assert.deepEqual(items.map((x) => x.spoken), expected, `${letterSpelling} ${digitMode}`);
+      assert.equal(C.copyLine(items), expected.join(', '));
+      assert.deepEqual(C.speechQueue(items).map((q) => q.text), [...LETTER_SPEECH[letterSpelling], ...DIGIT_SPEECH[digitMode]]);
+      // 大文字と小文字を区別しないときは綴りだけ
+      const plainCase = C.spell('Aj', { letterSpelling, digitMode, caseMode: 'ignore' }).map((x) => x.spoken);
+      assert.deepEqual(plainCase, LETTER_FORMS[letterSpelling].slice(0, 2).map((s) => s.split(' ')[1]));
+      combos += 1;
+    }
+  }
+  assert.equal(combos, 6);
+  // 決まっていない値は既定（原典どおり・ふつうの英語）
+  assert.deepEqual(C.spell('A1', { letterSpelling: 'x', digitMode: 'y' }).map((x) => x.spoken), ['Capital Alfa', 'One']);
 });
 
 test('速さと語の間：ふつう1.0・ゆっくり0.7、間はゆっくりのほうが長い', () => {

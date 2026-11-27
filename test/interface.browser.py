@@ -69,6 +69,13 @@ SUBTITLE_BREAK = """() => { const p = document.querySelector('.subtitle');
   const r = document.createRange(); r.setStart(node, i); r.setEnd(node, i + 6);
   const tops = new Set([...r.getClientRects()].map(x => Math.round(x.top))); return tops.size > 1 ? 'broken' : ''; }"""
 
+SPELL_SWITCHES = ("spelling-common", "digit-icao", "digit-icao-plain", "case-off", "spelling-official", "digit-plain", "case-on")
+# The run of letters of the test of the core (one letter each, a line break every 16 letters)
+SPACED = "\n".join([
+    "A L P H A M I K E E C H O T A N", "G O H O T E L Y A N K E E S I E", "R R A T A N G O D E L T A I N D",
+    "I G O A L P H A M I K E O S C A", "R N O V E M B E R D E L T A E C", "H O M I K E E C H O R O M E O A",
+    "L P H A L I M A D E L T A Q U E", "B E C U N I F O R M A L P H A R", "O M E O T A N G O Z U L U Q Q Q"])
+
 FAILURES = []
 
 
@@ -162,6 +169,22 @@ def test_layout(browser, url, width, height, language, theme, name):
         if tab == "find":
             page.click("#find-example")
         check(overflow(page) <= 0, (name, tab, "sideways scroll", overflow(page)))
+        if tab == "spell":
+            # Every choice of the switches: the result below does not move, and nothing sticks out sideways
+            head = "document.querySelector('#panel-spell .result-head').getBoundingClientRect().top"
+            start = page.evaluate(head)
+            for button in SPELL_SWITCHES:
+                page.evaluate(f"document.getElementById('{button}').click()")
+                check(abs(page.evaluate(head) - start) < 1, (name, "switch moved the result", button))
+                check(overflow(page) <= 0, (name, "sideways scroll after", button))
+        if tab == "reference":
+            heights = page.evaluate("[...new Set([...document.querySelectorAll('.letter-card')].map(e => Math.round(e.offsetHeight)))]")
+            check(len(heights) == 1, (name, "cards of different heights", heights))
+        if tab == "find":
+            # The run without breaks: the whole find tab still fits the width
+            page.click("#find-example-joined")
+            check(overflow(page) <= 0, (name, "sideways scroll with the run of letters", overflow(page)))
+            page.click("#find-example")
         # Nothing sticks out of the panel (a wide table or a long word)
         wide = page.evaluate(f"""() => {{ const p = document.getElementById('panel-{tab}').getBoundingClientRect();
           return [...document.querySelectorAll('#panel-{tab} *')].filter(e => {{ const r = e.getBoundingClientRect();
@@ -254,6 +277,68 @@ def test_speech(browser, url, name):
     context.close()
 
 
+def test_spelling_and_find(browser, url, name, output=None):
+    context, page, errors = open_page(browser, url, 390, 844, "ja", "light")
+    log = lambda: page.evaluate("window.__speechLog")
+    # Letter spelling and digits: the table, the line to copy and the voice follow the choice
+    page.fill("#spell-input", "Aj1")
+    page.click("#spelling-common")
+    page.click("#digit-icao")
+    check(page.text_content("#spell-copy-text") == "Capital Alpha, Small Juliet, Wun", (name, "copy common + icao"))
+    check(page.evaluate("document.querySelector('#digit-note .on').textContent").startswith("ICAO式で、綴りは原典のとおりです"), (name, "digit note"))
+    page.click("#digit-icao-plain")
+    check(page.text_content("#spell-copy-text") == "Capital Alpha, Small Juliet, One", (name, "copy icao plain"))
+    page.click("#spell-speak")
+    check(log()[-1]["text"] == "Capital Alpha", (name, "voice follows the spelling"))
+    page.click("#spell-stop")
+    page.click("#spelling-official")
+    page.click("#digit-plain")
+    check(page.text_content("#spell-copy-text") == "Capital Alfa, Small Juliett, One", (name, "copy official"))
+    # Find in text: the buttons that remove spaces and line breaks, and undo
+    page.click("#tab-find")
+    for button in ("remove-spaces", "remove-breaks", "undo-remove"):
+        check(page.is_disabled("#" + button), (name, "disabled on an empty text", button))
+    page.click("#find-example-joined")
+    original = page.input_value("#find-input")
+    check(page.text_content("#decoded-line") == "SECRET?KEY?", (name, "joined example", page.text_content("#decoded-line")))
+    check(page.text_content("#find-mode-line").startswith("自動で判断し、英字が切れ目なく続く並びとして"), (name, "mode line"))
+    check(page.evaluate("document.querySelectorAll('#find-text mark.unread').length") == 2, (name, "two unreadable parts marked"))
+    check(page.evaluate("[...document.querySelectorAll('#unread li')].map(e => e.textContent)") == ["PURPLE（6文字）", "ZZ（2文字）"], (name, "list"))
+    check(page.is_hidden("#singles-block") and page.is_visible("#unread-block"), (name, "unread list instead of singles"))
+    check(page.is_enabled("#remove-spaces") and page.is_enabled("#remove-breaks") and page.is_disabled("#undo-remove"), (name, "buttons"))
+    page.click("#remove-spaces")
+    check(page.text_content("#remove-status") == "空白を49個消しました。", (name, "removed spaces", page.text_content("#remove-status")))
+    check(" " not in page.input_value("#find-input"), (name, "no space left"))
+    check(page.is_disabled("#remove-spaces") and page.is_enabled("#undo-remove"), (name, "after removing spaces"))
+    page.click("#undo-remove")
+    check(page.input_value("#find-input") == original, (name, "undo"))
+    check(page.text_content("#remove-status") == "元に戻しました。" and page.is_disabled("#undo-remove"), (name, "after undo"))
+    page.click("#remove-spaces")
+    page.click("#remove-breaks")
+    check(page.text_content("#remove-status") == "改行を3個消しました。", (name, "removed breaks"))
+    check(page.text_content("#decoded-line") == "SECRET?KEY?", (name, "same result in one run"))
+    # Typing drops the undo
+    page.type("#find-input", "A")
+    check(page.is_disabled("#undo-remove"), (name, "typing drops undo"))
+    # The run of letters of the test, and the switch of how to read
+    page.fill("#find-input", SPACED)
+    check(page.text_content("#decoded-line") == "AMETHYSTD?AMONDEMERALDQUARTZ?", (name, "spaced run", page.text_content("#decoded-line")))
+    check(page.text_content("#find-count") == "区切った単語：27語・読めない部分：2か所", (name, "count line"))
+    page.click("[data-findmode=words]")
+    check(page.text_content("#find-mode-line") == "単語の間に空白がある文章として読みました。", (name, "words mode line"))
+    check(page.text_content("#decoded-line") == "", (name, "nothing in word mode"))
+    page.click("[data-findmode=auto]")
+    if output:
+        for width, height in ((1280, 800), (390, 844)):
+            page.set_viewport_size({"width": width, "height": height})
+            page.evaluate("document.querySelector('.tabs').scrollIntoView()")
+            page.wait_for_timeout(200)
+            page.screenshot(path=str(output / f"find_run_{width}.png"), caret="initial")
+            page.screenshot(path=str(output / f"find_run_{width}_full.png"), full_page=True, caret="initial")
+    assert_clean(page, errors, name)
+    context.close()
+
+
 def test_no_voice(browser, url, name):
     context, page, errors = open_page(browser, url, 390, 844, "ja", "light", no_voice=True)
     page.wait_for_timeout(1700)
@@ -294,6 +379,10 @@ def shots(browser, url, output):
             page.wait_for_timeout(300)
             page.screenshot(path=str(output / f"{tab}_{width}.png"), caret="initial")
             page.screenshot(path=str(output / f"{tab}_{width}_full.png"), full_page=True, caret="initial")
+            if tab == "reference":
+                page.evaluate("document.getElementById('letter-grid').scrollIntoView()")
+                page.wait_for_timeout(200)
+                page.screenshot(path=str(output / f"cards_{width}.png"), caret="initial")
         context.close()
 
 
@@ -314,9 +403,10 @@ def main():
                         test_layout(browser, url, width, height, language, theme, (browser_name, width, language, theme))
                         cases += 1
             test_speech(browser, url, (browser_name, "speech"))
+            test_spelling_and_find(browser, url, (browser_name, "spelling and find"), output if browser_name == "chromium" else None)
             test_no_voice(browser, url, (browser_name, "no voice"))
             test_file_url(browser, (browser_name, "file"))
-            cases += 3
+            cases += 4
             if browser_name == "chromium":
                 shots(browser, url, output)
             browser.close()

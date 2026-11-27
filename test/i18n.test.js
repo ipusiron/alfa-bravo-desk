@@ -61,6 +61,9 @@ test('値を差し込む文：差し込んだ形を読む', () => {
   assert.equal(M.t('variantIcao', { word: 'Nine' }, 'ja'), 'Nine（ICAO式の数字）');
   assert.equal(M.t('singleItem', { word: 'hotel', ch: 'H' }, 'en'), 'hotel (H)');
   assert.equal(M.t('cardSpeak', { ch: 'A', word: 'Alfa' }, 'ja'), 'A：Alfaを読み上げる');
+  assert.ok(M.ja.digitNoteIcao.includes('読み上げではWunをOneと同じ音で読みます。'));
+  assert.equal(M.ja.spellingOfficial, '原典どおり');
+  assert.equal(M.ja.digitIcaoPlain, 'ICAO式・ふつうの綴り');
   assert.equal(M.t('spellSkipped', { n: 2 }, 'en'), 'Symbols without a name and characters without a code word (2) are skipped.');
 });
 

@@ -77,15 +77,24 @@
               <button id="case-on" type="button" aria-pressed="true" data-i18n="caseOn">区別して伝える</button>
               <button id="case-off" type="button" aria-pressed="false" data-i18n="caseOff">区別しない</button>
             </div>
-            <p id="case-note" class="seg-note"></p>
+            <p id="case-note" class="seg-note stack"></p>
+          </fieldset>
+          <fieldset class="seg">
+            <legend data-i18n="spellingLegend">英字の綴り</legend>
+            <div class="seg-buttons">
+              <button id="spelling-official" type="button" aria-pressed="true" data-i18n="spellingOfficial">原典どおり</button>
+              <button id="spelling-common" type="button" aria-pressed="false" data-i18n="spellingCommon">英語でよく見る綴り</button>
+            </div>
+            <p id="spelling-note" class="seg-note stack"></p>
           </fieldset>
           <fieldset class="seg">
             <legend data-i18n="digitLegend">数字の読み方</legend>
-            <div class="seg-buttons">
-              <button id="digit-plain" type="button" aria-pressed="true" data-i18n="digitPlain">ふつうの英語</button>
-              <button id="digit-icao" type="button" aria-pressed="false" data-i18n="digitIcao">ICAO式</button>
+            <div class="seg-buttons seg-three">
+              <button id="digit-plain" type="button" aria-pressed="true" data-digit="plain" data-i18n="digitPlain">ふつうの英語</button>
+              <button id="digit-icao" type="button" aria-pressed="false" data-digit="icao" data-i18n="digitIcao">ICAO式・原典の綴り</button>
+              <button id="digit-icao-plain" type="button" aria-pressed="false" data-digit="icaoPlain" data-i18n="digitIcaoPlain">ICAO式・ふつうの綴り</button>
             </div>
-            <p id="digit-note" class="seg-note"></p>
+            <p id="digit-note" class="seg-note stack"></p>
           </fieldset>
         </div>
         <div class="result-head">
@@ -135,8 +144,26 @@
         <textarea id="find-input" rows="4" spellcheck="false" lang="en"></textarea>
         <p id="find-counter" class="counter"></p>
         <p id="find-over" class="warn" role="status" hidden></p>
+        <div class="actions tidy">
+          <button id="remove-spaces" type="button" data-i18n="removeSpaces">空白を消す</button>
+          <button id="remove-breaks" type="button" data-i18n="removeBreaks">改行を消す</button>
+          <button id="undo-remove" type="button" data-i18n="undoRemove" disabled>元に戻す</button>
+        </div>
+        <p id="remove-status" class="status" aria-live="polite"></p>
+        <p class="seg-note" data-i18n="removeNote">1文字ずつ空白や改行で区切った並びは、空白と改行を消すと1本の英字の並びになります。</p>
         <div class="row">
-          <button id="find-example" type="button" data-i18n="exampleButton">例を入れる</button>
+          <button id="find-example" type="button" data-i18n="exampleButton">例を入れる（ふつうの英文）</button>
+          <button id="find-example-joined" type="button" data-i18n="exampleJoinedButton">例を入れる（区切りのない並び）</button>
+        </div>
+        <div class="row">
+          <fieldset class="seg">
+            <legend data-i18n="findModeLegend">読み方</legend>
+            <div class="seg-buttons">
+              <button type="button" aria-pressed="true" data-findmode="auto" data-i18n="findModeAuto">自動</button>
+              <button type="button" aria-pressed="false" data-findmode="words" data-i18n="findModeWords">単語ごと</button>
+              <button type="button" aria-pressed="false" data-findmode="joined" data-i18n="findModeJoined">英字の並びを区切る</button>
+            </div>
+          </fieldset>
           <fieldset class="seg">
             <legend data-i18n="digitWordsLegend">数字の単語（Zero〜Nine・Ninerなど）</legend>
             <div class="seg-buttons">
@@ -149,6 +176,7 @@
           <h3 data-i18n="foundHeading">見つかった単語</h3>
           <span id="find-count" class="status"></span>
         </div>
+        <p id="find-mode-line" class="mode-line"></p>
         <p class="seg-note" data-i18n="markLegend">色の付いた印は続けて並んだ語、点線の印は単独で見つかった語です。</p>
         <div id="find-text" class="found-text" lang="en"></div>
         <h3 data-i18n="decodedHeading">戻した英字の列</h3>
@@ -171,9 +199,16 @@
           <p id="find-status" class="status speak-status" aria-live="polite"></p>
         </div>
         <p id="find-copy-status" class="status" aria-live="polite"></p>
-        <h3 data-i18n="singlesHeading">単独で見つかった語</h3>
-        <p class="seg-note" data-i18n="singlesNote">ふつうの英文の単語が通話表の単語と同じ綴りのことがあるため、英字の列には入れません。</p>
-        <ul id="singles" class="singles" lang="en"></ul>
+        <div id="singles-block">
+          <h3 data-i18n="singlesHeading">単独で見つかった語</h3>
+          <p class="seg-note" data-i18n="singlesNote">ふつうの英文の単語が通話表の単語と同じ綴りのことがあるため、英字の列には入れません。</p>
+          <ul id="singles" class="singles" lang="en"></ul>
+        </div>
+        <div id="unread-block" hidden>
+          <h3 data-i18n="unreadHeading">読めない部分</h3>
+          <p class="seg-note" data-i18n="unreadNote">通話表の単語として読めなかった部分です。</p>
+          <ul id="unread" class="singles" lang="en"></ul>
+        </div>
         <h3 data-i18n="variantsHeading">綴りの揺れとして拾った単語</h3>
         <div class="table-wrap">
           <table id="variants-table" class="variants-table">

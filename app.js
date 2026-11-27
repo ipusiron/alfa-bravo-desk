@@ -33,7 +33,10 @@
     tab: 'spell',
     caseMode: 'distinguish',
     digitMode: 'plain',
+    letterSpelling: 'official',
     findDigits: true,
+    findMode: 'auto',
+    undo: null,
     speed: 'normal',
     spellItems: [],
     findResult: null,
@@ -192,7 +195,20 @@
     off.addEventListener('click', () => { setPressed([on, off], off); apply(false); });
   }
   bindPair('case-on', 'case-off', (on) => { state.caseMode = on ? 'distinguish' : 'ignore'; stopSpeaking(); computeSpell(); });
-  bindPair('digit-plain', 'digit-icao', (plain) => { state.digitMode = plain ? 'plain' : 'icao'; stopSpeaking(); computeSpell(); });
+  bindPair('spelling-official', 'spelling-common', (official) => {
+    state.letterSpelling = official ? 'official' : 'common';
+    stopSpeaking();
+    computeSpell();
+  });
+  const digitButtons = [...document.querySelectorAll('[data-digit]')];
+  for (const b of digitButtons) {
+    b.addEventListener('click', () => {
+      setPressed(digitButtons, b);
+      state.digitMode = b.dataset.digit;
+      stopSpeaking();
+      computeSpell();
+    });
+  }
   bindPair('digits-on', 'digits-off', (on) => { state.findDigits = on; stopSpeaking(); computeFind(); });
   const speedButtons = [...document.querySelectorAll('[data-speed]')];
   for (const b of speedButtons) {
@@ -221,7 +237,7 @@
   const spellInput = $('spell-input');
   const updateSpellInput = bindLimited(spellInput, Core.MAX_SPELL, 'spell-over', 'spell-counter', () => computeSpell());
   function computeSpell() {
-    state.spellItems = Core.spell(spellInput.value, { caseMode: state.caseMode, digitMode: state.digitMode });
+    state.spellItems = Core.spell(spellInput.value, { caseMode: state.caseMode, digitMode: state.digitMode, letterSpelling: state.letterSpelling });
     renderSpell();
   }
   function readingCell(item) {
@@ -265,10 +281,22 @@
     $('spell-summary').textContent = items.length ? t(items.length === 1 ? 'resultSummaryOne' : 'resultSummary', { n: items.length, parts }) : '';
     $('spell-copy-text').textContent = Core.copyLine(items);
     $('spell-copy').disabled = !items.length;
-    $('case-note').replaceChildren(words(t(state.caseMode === 'ignore' ? 'caseNoteOff' : 'caseNoteOn')));
-    $('digit-note').replaceChildren(words(t(state.digitMode === 'icao' ? 'digitNoteIcao' : 'digitNotePlain')));
+    stackNote($('case-note'), ['caseNoteOn', 'caseNoteOff'], state.caseMode === 'ignore' ? 'caseNoteOff' : 'caseNoteOn');
+    stackNote($('spelling-note'), ['spellingNoteOfficial', 'spellingNoteCommon'],
+      state.letterSpelling === 'common' ? 'spellingNoteCommon' : 'spellingNoteOfficial');
+    stackNote($('digit-note'), ['digitNotePlain', 'digitNoteIcao', 'digitNoteIcaoPlain'],
+      { plain: 'digitNotePlain', icao: 'digitNoteIcao', icaoPlain: 'digitNoteIcaoPlain' }[state.digitMode]);
     if (!speech.owner || speech.owner.name !== 'spell') setSpellIdle();
     refreshSpeakButtons();
+  }
+  // 切り替えの下の説明：選べる文をすべて同じ場所に重ね、選んだ文だけを見せる（高さは長い文に合わせて変わらない）
+  function stackNote(el, keys, active) {
+    el.replaceChildren(...keys.map((key) => {
+      const span = words(t(key));
+      span.className = key === active ? 'on' : 'off';
+      if (key !== active) span.setAttribute('aria-hidden', 'true');
+      return span;
+    }));
   }
   function setSpellIdle(message) {
     const skipped = state.spellItems.filter((x) => x.spoken === null).length;
@@ -316,13 +344,47 @@
   // ===== タブ2：文章から見つける =====
   const findInput = $('find-input');
   const updateFindInput = bindLimited(findInput, Core.MAX_FIND, 'find-over', 'find-counter', () => computeFind());
-  $('find-example').addEventListener('click', () => {
+  function putFindText(text, status) {
     stopSpeaking();
-    findInput.value = t('exampleText');
+    findInput.value = text;
     updateFindInput(true);
+    $('remove-status').textContent = status || '';
+  }
+  $('find-example').addEventListener('click', () => { state.undo = null; putFindText(t('exampleText')); });
+  $('find-example-joined').addEventListener('click', () => { state.undo = null; putFindText(t('exampleJoinedText')); });
+  // 空白・改行を消す（1段だけ元に戻せる）。手で書き換えたら、元に戻す先は捨てる
+  $('remove-spaces').addEventListener('click', () => {
+    const r = Core.removeSpaces(findInput.value);
+    state.undo = findInput.value;
+    putFindText(r.text, t('removedSpaces', { n: Core.formatNumber(r.count) }));
   });
+  $('remove-breaks').addEventListener('click', () => {
+    const r = Core.removeLineBreaks(findInput.value);
+    state.undo = findInput.value;
+    putFindText(r.text, t('removedBreaks', { n: Core.formatNumber(r.count) }));
+  });
+  $('undo-remove').addEventListener('click', () => {
+    const previous = state.undo;
+    state.undo = null;
+    if (previous !== null) putFindText(previous, t('undone'));
+  });
+  findInput.addEventListener('input', () => { state.undo = null; $('remove-status').textContent = ''; refreshTidyButtons(); });
+  function refreshTidyButtons() {
+    $('remove-spaces').disabled = Core.removeSpaces(findInput.value).count === 0;
+    $('remove-breaks').disabled = Core.removeLineBreaks(findInput.value).count === 0;
+    $('undo-remove').disabled = state.undo === null;
+  }
+  const modeButtons = [...document.querySelectorAll('[data-findmode]')];
+  for (const b of modeButtons) {
+    b.addEventListener('click', () => {
+      setPressed(modeButtons, b);
+      state.findMode = b.dataset.findmode;
+      stopSpeaking();
+      computeFind();
+    });
+  }
   function computeFind() {
-    state.findResult = Core.find(findInput.value, { digits: state.findDigits });
+    state.findResult = Core.find(findInput.value, { digits: state.findDigits, mode: state.findMode });
     renderFind();
   }
   function renderFind() {
@@ -336,22 +398,41 @@
       box.setAttribute('lang', 'en');
       const parts = [];
       let last = 0;
-      r.matches.forEach((m, k) => {
+      const spans = r.mode === 'joined'
+        ? r.parts.map((p) => (p.kind === 'word' ? { ...r.matches[p.k], k: p.k } : { ...r.unread[p.u], unread: true }))
+        : r.matches.map((m, k) => ({ ...m, k }));
+      for (const m of spans) {
         if (m.start > last) parts.push(text.slice(last, m.start));
-        parts.push(E('mark', { class: m.inSequence ? 'seq' : 'single', 'data-k': k }, m.text, E('sup', null, m.char)));
+        parts.push(m.unread ? E('mark', { class: 'unread' }, m.text, E('sup', null, '?'))
+          : E('mark', { class: m.inSequence ? 'seq' : 'single', 'data-k': m.k }, m.text, E('sup', null, m.char)));
         last = m.end;
-      });
+      }
       if (last < text.length) parts.push(text.slice(last));
       box.replaceChildren(...parts);
     }
     const seq = r.sequences.reduce((a, s) => a + s.length, 0);
-    $('find-count').textContent = text ? (r.matches.length
-      ? t(r.matches.length === 1 ? 'foundCountOne' : 'foundCount', { n: r.matches.length, seq, single: r.singles.length }) : t('noneFound')) : '';
+    const joined = r.mode === 'joined';
+    const countLine = joined ? t('foundCountJoined', { n: r.matches.length, m: r.unread.length })
+      : t(r.matches.length === 1 ? 'foundCountOne' : 'foundCount', { n: r.matches.length, seq, single: r.singles.length });
+    $('find-count').textContent = text ? (r.matches.length || r.unread.length ? countLine : t('noneFound')) : '';
+    const modeKey = (joined ? 'modeJoined' : 'modeWords') + (r.auto ? 'Auto' : '');
+    $('find-mode-line').replaceChildren(text ? words(t(modeKey)) : '');
+    const lettersOf = (s) => s.replace(/[^A-Za-z]/g, '');
     const decoded = [];
-    r.sequences.forEach((s, n) => {
-      if (n) decoded.push(E('span', { class: 'gap', 'aria-hidden': 'true' }));
-      for (const k of s) decoded.push(E('span', { class: 'decoded-item', 'data-k': k }, E('b', null, r.matches[k].char), E('small', null, r.matches[k].text)));
-    });
+    if (joined) {
+      for (const p of r.parts) {
+        decoded.push(p.kind === 'word'
+          ? E('span', { class: 'decoded-item', 'data-k': p.k }, E('b', null, r.matches[p.k].char), E('small', null, lettersOf(r.matches[p.k].text)))
+          : E('span', { class: 'decoded-item unread' }, E('b', null, '?'), E('small', null, lettersOf(r.unread[p.u].text))));
+      }
+    } else {
+      r.sequences.forEach((s, n) => {
+        if (n) decoded.push(E('span', { class: 'gap', 'aria-hidden': 'true' }));
+        for (const k of s) {
+          decoded.push(E('span', { class: 'decoded-item', 'data-k': k }, E('b', null, r.matches[k].char), E('small', null, r.matches[k].text)));
+        }
+      });
+    }
     if (!decoded.length) decoded.push(words(t('decodedEmpty')));
     $('decoded').replaceChildren(...decoded);
     $('decoded-line').textContent = r.decoded;
@@ -359,6 +440,11 @@
     $('find-copy').disabled = !r.decoded;
     const singles = r.singles.map((k) => E('li', null, t('singleItem', { word: r.matches[k].text.replace(/\s+/g, ' '), ch: r.matches[k].char })));
     $('singles').replaceChildren(...(singles.length ? singles : [E('li', { class: 'empty' }, t('singlesEmpty'))]));
+    $('singles-block').hidden = joined;
+    $('unread-block').hidden = !joined;
+    const unread = r.unread.map((u) => E('li', null, t('unreadItem', { text: lettersOf(u.text), n: u.letters })));
+    $('unread').replaceChildren(...(unread.length ? unread : [E('li', { class: 'empty' }, t('unreadEmpty'))]));
+    refreshTidyButtons();
     const rows = r.variants.map((v) => E('tr', null, E('td', null, v.text),
       E('td', null, v.variant === 'icao' ? words(t('variantIcao', { word: v.canon })) : v.canon), E('td', null, v.char)));
     $('variants-body').replaceChildren(...rows);
@@ -391,18 +477,20 @@
   $('find-copy').addEventListener('click', () => copyText(state.findResult.decoded, $('decoded-line'), $('find-copy-status')));
 
   // ===== タブ3：一覧と座学 =====
-  function card(ch, word, kana, icao) {
+  function card(ch, word, kana, icao, alt) {
     const button = E('button', { class: 'letter-card', type: 'button', 'data-word': word, lang: 'en',
       'aria-label': t('cardSpeak', { ch, word }) },
     E('span', { class: 'lt', 'aria-hidden': 'true' }, ch), E('span', { class: 'spk', 'aria-hidden': 'true' }, '▶'),
     E('span', { class: 'sp', 'aria-hidden': 'true' }, word), E('span', { class: 'kn', lang: 'ja', 'aria-hidden': 'true' }, kana),
-    icao ? E('span', { class: 'ic', 'aria-hidden': 'true' }, E('span', { lang: I18n.lang }, t('icaoLabel')), E('br'), E('b', null, icao)) : null);
+    icao ? E('span', { class: 'ic', 'aria-hidden': 'true' }, E('span', { lang: I18n.lang }, t('icaoLabel')), E('br'), E('b', null, icao))
+      : alt ? E('span', { class: 'ic', 'aria-hidden': 'true' }, E('span', { lang: I18n.lang }, t('altLabel')), E('br'), E('b', null, alt))
+        : E('span', { class: 'ic', 'aria-hidden': 'true' }, '\u00a0', E('br'), '\u00a0'));
     button.addEventListener('click', () => speakCard(button, word));
     return button;
   }
   function renderReference() {
-    $('letter-grid').replaceChildren(...Core.LETTERS.map((l) => card(l.ch, l.word, l.kana, null)));
-    $('digit-grid').replaceChildren(...Core.DIGITS.map((d) => card(d.ch, d.word, d.kana, d.icao)));
+    $('letter-grid').replaceChildren(...Core.LETTERS.map((l) => card(l.ch, l.word, l.kana, null, l.alt)));
+    $('digit-grid').replaceChildren(...Core.DIGITS.map((d) => card(d.ch, d.word, d.kana, d.icao, null)));
     $('ref-status').textContent = '';
   }
   function speakCard(button, word) {
