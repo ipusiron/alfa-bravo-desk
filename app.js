@@ -334,8 +334,9 @@
     const button = $('say-case');
     const usable = state.caseMode !== 'ignore';
     button.disabled = !usable;
-    button.setAttribute('aria-checked', state.sayCase ? 'true' : 'false');
-    $('say-case-state').textContent = t(state.sayCase ? 'switchOn' : 'switchOff');
+    // 押せない間は「使えません」と出し、オンの見た目を残さない（aria-checked も合わせる）
+    button.setAttribute('aria-checked', usable && state.sayCase ? 'true' : 'false');
+    $('say-case-state').textContent = t(!usable ? 'switchUnavailable' : state.sayCase ? 'switchOn' : 'switchOff');
     stackNote($('say-case-note'), ['sayCaseNoteOn', 'sayCaseNoteOff'], usable ? 'sayCaseNoteOn' : 'sayCaseNoteOff');
   }
   $('say-case').addEventListener('click', () => {
@@ -541,8 +542,9 @@
   }
   // 数字のカード：ICAO式の綴りがふつうの英語と違う数字には、ICAO式で読むボタンを添える（カードの中にボタンを入れないよう、外に並べる）
   function digitCard(d) {
-    const main = card(d.ch, d.word, d.kana, d.icao === d.word ? d.icao : null, null);
-    if (d.icao === d.word) return E('div', { class: 'card-wrap' }, main);
+    const main = card(d.ch, d.word, d.kana, null, null);
+    // ICAO式もふつうの英語と同じ綴りの数字は、ボタンの場所に押せない短い文を置く（カードの高さをそろえる）
+    if (d.icao === d.word) return E('div', { class: 'card-wrap' }, main, E('span', { class: 'icao-same' }, t('icaoSame')));
     const icao = E('button', { class: 'icao-speak', type: 'button', lang: 'en', 'aria-label': t('cardSpeakIcao', { word: d.icao }) },
       E('span', { lang: I18n.lang, 'aria-hidden': 'true' }, t('icaoLabel')), E('br'), E('b', { 'aria-hidden': 'true' }, '▶ ' + d.icao));
     icao.addEventListener('click', () => speakCard(icao, d.icao));
